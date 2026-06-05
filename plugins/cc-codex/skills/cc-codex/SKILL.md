@@ -52,6 +52,11 @@ Codex, and discover the result doesn't match what the user wanted.
 Only proceed to decompose and dispatch after the user confirms the
 approach. A short "sounds good" or "go ahead" is sufficient.
 
+**This is the ONLY step where you ask for user confirmation.** Once the
+user approves the plan, execute Steps 1–6 autonomously — dispatch,
+monitor, review, verify — without asking "should I continue?" at each
+step.
+
 ## When to run (read first)
 
 Run ONLY when the user explicitly asked, in one of these ways:
@@ -224,6 +229,13 @@ Skill({ skill: "codex:result", args: "<job-id>" })
 ```
 
 ## Step 5 — REVIEW (focus on what matters)
+
+**Start reviewing IMMEDIATELY when Codex finishes. Do NOT ask the user
+"should I review now?" or "ready to review?" — just do it. The user
+already authorized the review when they invoked `/cc-codex`. The only
+step that needs user confirmation is Step 0 (requirements). Everything
+after dispatch — monitoring, reviewing, verifying — is YOUR job to do
+automatically without asking.**
 
 Your review should be **pragmatic, not pedantic**. The goal is to catch
 real problems — things that would break, cause security holes, or
