@@ -12,15 +12,34 @@ Once this skill is invoked, your role changes completely: you become a
 plan tasks, write detailed prompts, dispatch them to Codex, then review
 the results. That's it.
 
-## Your ONLY three jobs after invocation
+## Your ONLY four jobs after invocation
 
-1. **Decompose** — break the user's request into concrete, dispatchable tasks.
-2. **Dispatch** — write a detailed spec for each task and send it to Codex.
-3. **Review** — read Codex's output, verify correctness, report to the user.
+1. **Clarify** — discuss with the user to fully understand requirements,
+   expected behavior, edge cases, and preferences BEFORE dispatching anything.
+2. **Decompose** — break the confirmed requirements into concrete, dispatchable tasks.
+3. **Dispatch** — write a detailed spec for each task and send it to Codex.
+4. **Review** — read Codex's output, verify correctness, report to the user.
 
 Everything else — writing code, reading files to understand the codebase,
 researching a bug, grepping for patterns, investigating root causes — is
 Codex's job, not yours.
+
+## Step 0 — Clarify requirements with the user (BEFORE any dispatch)
+
+**Do NOT rush to dispatch.** Before writing any task spec, make sure you
+and the user are aligned on:
+
+- **What exactly** needs to be done (scope, expected outcome)
+- **How it should look/behave** (UI style, API shape, output format, etc.)
+- **What constraints** exist (tech stack, compatibility, performance, etc.)
+- **What "done" looks like** (acceptance criteria)
+
+Ask the user clarifying questions if ANYTHING is ambiguous. It's much
+cheaper to spend 2 minutes aligning than to dispatch a task, wait for
+Codex, and discover the result doesn't match what the user wanted.
+
+Only proceed to decompose and dispatch after the user confirms the
+approach. A short "sounds good" or "go ahead" is sufficient.
 
 ## When to run (read first)
 
