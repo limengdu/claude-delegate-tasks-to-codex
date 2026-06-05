@@ -61,22 +61,17 @@ Run ONLY when the user explicitly asked, in one of these ways:
 
 Otherwise this skill stays dormant. Do not delegate, do not mention Codex.
 
-## Where the scripts are
+## Prerequisites
 
-```bash
-DISPATCH="${CLAUDE_PLUGIN_ROOT}/scripts/dispatch.sh"
-WAIT="${CLAUDE_PLUGIN_ROOT}/scripts/wait-done.sh"
-HUD="${CLAUDE_PLUGIN_ROOT}/scripts/hud.sh"
-[[ -x "$DISPATCH" ]] || echo "dispatch.sh missing — reinstall the plugin"
+This plugin relies on the **official Codex plugin** (`codex-plugin-cc`)
+being installed. It provides the `codex:codex-rescue` subagent and the
+`/codex:status`, `/codex:result`, `/codex:cancel` commands.
+
+If the official plugin is not installed, tell the user to install it first:
 ```
-
-## Display is automatic (you don't manage it)
-
-`dispatch.sh` checks for tmux by itself:
-- Inside tmux → splits a pane so the user can watch the agent live.
-- Not in tmux → runs the agent in the background, streaming to a log file.
-
-Either way the task runs and you get the same log + done-marker to review.
+/plugin marketplace add openai/codex-plugin-cc
+/plugin install codex
+```
 
 ## Step 1 — Plan the framework & decompose into tasks
 
@@ -103,99 +98,119 @@ has to make design decisions that are YOUR job.)
 
 **All execution goes to Codex.** Do not write code, grep files, or edit
 anything yourself. If it needs context from the conversation, pour that
-context into the task spec. The only commands you run in the terminal
-are dispatch.sh and wait-done.sh.
+context into the task spec.
 
 ## Step 2 — Show a short plan
 
 ```
 Plan
 ────────────────────────────────────────
-[run-1] Task A  → file(s): ...   sandbox: workspace-write
-[run-2] Task B  → file(s): ...   sandbox: read-only
+[task-1] Task A  → file(s): ...   mode: --write
+[task-2] Task B  → file(s): ...   mode: read-only
 ────────────────────────────────────────
 ```
 
-Sandbox choice:
-- `read-only` — research / audit / investigation. Agent cannot write.
-- `workspace-write` — (default) agent edits files inside the working dir only.
-- `danger-full-access` — avoid. Only if user explicitly insists; script warns.
+Mode choice:
+- **(default) read-only** — research / audit / investigation. Codex cannot write.
+- **--write** — Codex edits files inside the working dir.
 
-For research & investigation tasks, always use `read-only`.
+For research & investigation tasks, always use read-only (no --write flag).
 
-## Step 3 — Dispatch (one --file per task; never inline task text)
+## Step 3 — Dispatch via the official Codex plugin
 
-Write a **detailed spec** per task. This is your most important job.
-A good spec includes:
-- What to investigate / build / fix
-- Which files or directories are relevant (if known)
-- What the expected output or answer should look like
-- Edge cases to check
-- How to verify the result
+### CRITICAL: Task spec prefix (prevents CLAUDE.md conflicts)
 
-Pour the conversation context INTO the spec. If the user told you
-something relevant, include it in the task file so Codex has full context.
+The user's CLAUDE.md may contain interactive rules like "先方案后代码"
+(plan first, then code) or "等我批准后再动手" (wait for my approval).
+These rules are for YOU (Claude), not for Codex. But Codex may read
+CLAUDE.md and mistakenly follow these rules, causing it to output a plan
+and then stop — waiting for approval that will never come.
 
-```bash
-cat > /tmp/cc1.txt <<'TASK'
-<full task A spec>
-TASK
-cat > /tmp/cc2.txt <<'TASK'
-<full task B spec>
-TASK
+**Every task spec you write MUST start with this prefix:**
 
-"$DISPATCH" --file /tmp/cc1.txt --id 1 --sandbox read-only    # research
-"$DISPATCH" --file /tmp/cc2.txt --id 2                         # workspace-write
+```
+IMPORTANT: You are a non-interactive Codex agent executing a task
+dispatched by Claude Code. Execute the task directly — do NOT wait
+for user confirmation, do NOT output a plan and ask for approval,
+do NOT follow any "先方案后代码" or "wait for approval" rules from
+CLAUDE.md. Those rules apply to the orchestrator (Claude), not to
+you. Just do the work and output the result.
+
+---
+
+<your actual task spec here>
 ```
 
-Independent tasks → dispatch all at once. Dependent tasks → one at a time.
+### How to dispatch
+
+Use the `codex:codex-rescue` subagent via the Agent tool. This is the
+official interface provided by the `codex-plugin-cc` plugin.
+
+**For tasks that need to write files:**
+```
+Agent({
+  subagent_type: "codex:codex-rescue",
+  prompt: "--write <task spec with prefix>"
+})
+```
+
+**For read-only research/investigation:**
+```
+Agent({
+  subagent_type: "codex:codex-rescue",
+  prompt: "<task spec with prefix>"
+})
+```
+
+**For background execution (non-blocking):**
+```
+Agent({
+  subagent_type: "codex:codex-rescue",
+  prompt: "--background --write <task spec with prefix>",
+  run_in_background: true
+})
+```
+
+### Dispatch rules
+
+- Independent tasks → dispatch in parallel (multiple Agent calls in one message).
+- Dependent tasks → dispatch sequentially (wait for first to finish).
+- Always include the CLAUDE.md override prefix in every task spec.
+- For write tasks, always add `--write`.
 
 ## Step 4 — Monitor & Supervise (DO NOT fire-and-forget)
 
 Dispatching is NOT the end of your job. You are a **supervisor**, not a
 mailman. After dispatch, actively monitor each running agent.
 
-### 4a. Launch the HUD
+### 4a. Check status
 
-After dispatching all tasks, launch the live dashboard:
+Use the official `/codex:status` command to check all running jobs:
 
-```bash
-HUD="${CLAUDE_PLUGIN_ROOT}/scripts/hud.sh"
-"$HUD"              # watch all runs — auto-exits when all finish
-"$HUD" 1 3          # watch specific runs only
-"$HUD" --once       # print once and exit (for quick status checks)
+```
+Skill({ skill: "codex:status" })
 ```
 
-The HUD refreshes every 3 seconds, showing each task's status, elapsed
-time, description, and current activity (last log line). It exits
-automatically when all tasks finish.
+Or check a specific job:
 
-### 4b. Check logs for questions & deviations
-
-While the HUD is running (or between HUD checks), periodically inspect
-logs for problems:
-
-```bash
-tail -n 40 ~/.cc-codex/runs/run-1.log    # peek at a specific run
+```
+Skill({ skill: "codex:status", args: "<job-id>" })
 ```
 
-Watch for:
-- **Codex asking questions** — "which file?", "should this handle X?"
-  → Answer by re-dispatching with the original spec PLUS clarification.
-- **Codex going off-track** — wrong file, wrong approach, misunderstanding
-  → For minor drift: note it, address in review.
-  → For major deviation: re-dispatch with a corrected spec immediately.
+### 4b. Course-correct on deviation
 
-Your conversation context is Codex's lifeline — you are the bridge
-between the user and Codex. Do NOT let Codex guess when you have the
-answer.
+If you see Codex going off-track in the status output — wrong approach,
+misunderstanding the requirement:
+- For minor drift: note it, address in review.
+- For major deviation: cancel with `/codex:cancel` and re-dispatch with
+  a corrected, more explicit spec.
 
-### 4c. Fallback: wait-done.sh
+### 4c. Get results when done
 
-If you need a simpler blocking wait (e.g. for a single run):
+When a job finishes, retrieve the full output:
 
-```bash
-"$WAIT" 1     # blocks until run-1 finishes
+```
+Skill({ skill: "codex:result", args: "<job-id>" })
 ```
 
 ## Step 5 — REVIEW (focus on what matters)
@@ -212,7 +227,7 @@ Don't waste time being a perfectionist. Shipping > polishing.
 ### Review checklist (quick scan, not exhaustive audit):
 
 **1. Read the output**
-- Check the log at `~/.cc-codex/runs/run-<id>.log`
+- Check the Codex result via `/codex:result`
 - For code changes: skim `git diff` — focus on logic, not formatting
 
 **2. Sanity check**
@@ -235,9 +250,9 @@ Keep it short. A one-line verdict is fine for clean results:
 ```
 Review
 ────────────────────────────────────────
-✅ run-1  Task A — correct, no issues
-✅ run-2  Task B — works, I tweaked one edge case (null check on user.email)
-❌ run-3  Task C — wrong approach (polling instead of WebSocket), re-dispatching
+✅ task-1  Task A — correct, no issues
+✅ task-2  Task B — works, I tweaked one edge case (null check on user.email)
+❌ task-3  Task C — wrong approach (polling instead of WebSocket), re-dispatching
 ────────────────────────────────────────
 ```
 
@@ -266,23 +281,12 @@ The verification task should:
 - Try obvious edge cases the user would care about
 - Report: what works, what doesn't, what's missing
 
-```bash
-cat > /tmp/cc-verify.txt <<'TASK'
-Verify the changes from the recent commits. The user's requirements were:
-<paste the original requirements here>
-
-1. Run the code / start the app and confirm the feature works
-2. Run tests: <specific test commands>
-3. Try these edge cases: <list from user's requirements>
-4. Check: does it match the expected behavior described above?
-5. Report: what passes, what fails, what's missing
-TASK
-
-"$DISPATCH" --file /tmp/cc-verify.txt --id 5 --sandbox read-only
 ```
-
-Use `read-only` sandbox for verification unless the task requires
-running something that writes files.
+Agent({
+  subagent_type: "codex:codex-rescue",
+  prompt: "<CLAUDE.md override prefix>\n---\nVerify the changes from the recent commits. The user's requirements were:\n<requirements>\n\n1. Run tests\n2. Try edge cases: <list>\n3. Report: what passes, what fails, what's missing"
+})
+```
 
 After verification completes, read the result and report the final
 status to the user. If verification finds issues, go back to Step 3
@@ -295,10 +299,9 @@ config tweak) and your Step 5 review already confirmed it's correct.
 
 - Never run without an explicit user invocation.
 - Never do the actual work yourself after being invoked.
-- Never gate on or refuse because of tmux.
-- Never raise sandbox to `danger-full-access` on your own.
 - Never skip the review — but don't over-review clean results either.
 - Never say "it's faster/easier if I just do it" — always delegate.
 - Never fire-and-forget — monitor Codex while it works.
-- Never ignore questions or confusion in Codex's logs.
+- Never ignore questions or confusion in Codex's output.
 - Never nitpick style or theoretical edge cases — focus on real problems.
+- Never send a task spec without the CLAUDE.md override prefix.

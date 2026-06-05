@@ -16,25 +16,23 @@
 |------|---------|----------|
 | **自动抢占** | 装了就接管所有编码任务 | **只在你说了才动** |
 | **AI 自己揽活** | 说了委派还是自己干 | **强制委派,CC 只做决策和审核** |
-| **安全裸奔** | 默认放开整台电脑权限 | **默认只能动当前项目** |
+| **CLAUDE.md 冲突** | Codex 读了"先方案后代码"就停住 | **自动注入前缀,跳过交互式规则** |
 | **没有审核** | 写完直接交差 | **CC 审核 + 派 Codex 验证** |
-| **环境依赖** | 没 tmux 就罢工 | **tmux 可选** |
 
-## 安装(在 Claude Code 里粘两行)
+## 安装
 
-打开 Claude Code,输入:
+> **前置依赖:** 必须先安装[官方 Codex 插件](https://github.com/openai/codex-plugin-cc)。本插件是在官方插件之上的调度层。
+
+打开 Claude Code,按顺序执行:
 
 ```
+/plugin marketplace add openai/codex-plugin-cc
+/plugin install codex
 /plugin marketplace add limengdu/claude-delegate-tasks-to-codex
-```
-
-```
 /plugin install cc-codex
 ```
 
-完事。**所有项目通用,不用每个项目重装。**
-
-> 前置依赖: [Codex CLI](https://github.com/openai/codex)（`npm install -g @openai/codex`,然后 `codex --login`）。[tmux](https://github.com/tmux/tmux) **可选**——有就分屏看,没有就后台跑。
+**所有项目通用,不用每个项目重装。**
 
 ## 使用
 
@@ -61,9 +59,9 @@ Step 0: Claude 跟你确认需求（聊清楚再动手）
   ↓
 Step 1: Claude 定框架、做架构决策、拆任务（大脑的活）
   ↓
-Step 2-3: Claude 写详细 spec → dispatch.sh 派给 Codex
+Step 2-3: Claude 写详细 spec → 通过官方插件派给 Codex
   ↓
-Step 4: HUD 实时仪表盘 + Claude 监工（盯进度、答疑、纠偏）
+Step 4: Claude 用 /codex:status 监工（盯进度、纠偏）
   ↓
 Step 5: Claude 审核（抓大放小,关注致命问题）
   ↓
@@ -89,31 +87,15 @@ Step 6: 派另一个 Codex 验证（对照需求逐项检查）
 
 不是把你那句话直接转发,而是**展开成详细的执行指令**——包含具体要创建的文件、用什么技术、什么数据结构、边界情况怎么处理。Codex 拿到的是**明确的执行命令**,不需要自己做任何设计决策。
 
-### 实时 HUD 仪表盘
+每条任务都自动加上 **CLAUDE.md 覆盖前缀**,告诉 Codex"你是非交互式 agent,直接执行,不要等批准"——避免 Codex 读到用户的 CLAUDE.md 里"先方案后代码"之类的规则后停住。
 
-派完所有任务后,终端自动显示实时刷新的仪表盘,每 3 秒更新一次:
+### 调度方式
 
-```
-cc-codex HUD                              14:32:05
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- #1  ✅ done     2m13s  Write auth handler...
- #2  ⚙  running  1m05s  Investigate test failures...
-     └─ Reading src/tests/auth.test.ts...
- #3  ⚙  running  0m42s  Refactor database...
-     └─ Modifying db/connection.ts...
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- Total: 3  |  Running: 2  |  Done: 1
-```
-
-所有任务完成后仪表盘自动退出,Claude 继续审核。
-
-### Codex 怎么汇报
-
-靠**退出时写一个标记文件**。Claude 同时通过 HUD 和日志监控进度,发现 Codex 跑偏或有疑问会及时介入纠正。
+通过官方 `codex-plugin-cc` 的 `codex:codex-rescue` subagent 派活,用 `/codex:status` 查进度,`/codex:result` 取结果。不再使用自定义 shell 脚本。
 
 ### Claude 怎么审核
 
-1. **读产出** — 看日志、`git diff`
+1. **读产出** — `/codex:result`、`git diff`
 2. **务实检查** — 有没有致命 bug、安全问题、逻辑错误?没有就放行
 3. **派 Codex 验证** — 让另一个 Codex 实际运行、跑测试、试边缘情况
 4. **最终判定** — ✅通过 / ⚠️小问题自己改了 / ❌重派
@@ -138,13 +120,9 @@ claude-delegate-tasks-to-codex/
 │       │   └── plugin.json
 │       ├── commands/
 │       │   └── cc-codex.md          # /cc-codex 命令
-│       ├── scripts/
-│       │   ├── dispatch.sh          # 派活
-│       │   ├── hud.sh               # 实时仪表盘
-│       │   └── wait-done.sh         # 等完成(备用)
 │       └── skills/
 │           └── cc-codex/
-│               └── SKILL.md         # 说明书
+│               └── SKILL.md         # 调度说明书
 ├── README.md
 └── LICENSE
 ```
@@ -163,20 +141,22 @@ Existing orchestration tools auto-trigger on all tasks, run with unsafe defaults
 
 - **Explicit trigger only** — `/cc-codex` or "use Codex to…". Never auto-activates.
 - **Forced delegation** — Claude makes decisions and reviews; Codex does all execution. No "I'll just do it myself."
-- **Safe defaults** — `workspace-write` sandbox (current dir only). No auto-dismissing prompts.
+- **CLAUDE.md safe** — Auto-injects a prefix so Codex ignores interactive rules ("plan first, then code") that would cause it to stall.
 - **Real review** — Claude reviews + dispatches a second Codex agent to verify.
-- **tmux optional** — splits a pane if available; background if not. Never refuses.
+- **Built on official plugin** — Uses `codex-plugin-cc` under the hood for reliable dispatch, status tracking, and job control.
 
-## Install (two commands in Claude Code)
+## Install
+
+> **Prerequisite:** The [official Codex plugin](https://github.com/openai/codex-plugin-cc) must be installed first. cc-codex is an orchestration layer on top of it.
 
 ```
+/plugin marketplace add openai/codex-plugin-cc
+/plugin install codex
 /plugin marketplace add limengdu/claude-delegate-tasks-to-codex
 /plugin install cc-codex
 ```
 
 Works in all projects. No per-project setup.
-
-Prerequisite: [Codex CLI](https://github.com/openai/codex) (`npm i -g @openai/codex` + `codex --login`). tmux optional.
 
 ## Use
 
@@ -196,8 +176,8 @@ Without the trigger, the skill stays dormant.
 
 1. **Clarify** — Claude discusses requirements with you before doing anything.
 2. **Architect** — Claude makes design decisions, defines the framework, breaks work into tasks with detailed specs.
-3. **Dispatch** — `dispatch.sh` launches `codex exec` in a tmux pane (if available) or background process.
-4. **Supervise** — Live HUD dashboard shows all task progress. Claude monitors logs, answers Codex's questions, course-corrects on deviation.
+3. **Dispatch** — Tasks are sent to Codex via the official `codex:codex-rescue` subagent, with a CLAUDE.md override prefix to prevent stalling.
+4. **Supervise** — Claude monitors progress via `/codex:status`, course-corrects on deviation.
 5. **Review** — Claude reads the output, checks for real problems (not nitpicks). Reports ✅/⚠️/❌ per task.
 6. **Verify** — A second Codex agent runs the code, tests edge cases, and checks against original requirements.
 
