@@ -28,11 +28,20 @@
 ```
 /plugin marketplace add openai/codex-plugin-cc
 /plugin install codex
+/plugin marketplace add jarrodwatts/claude-hud
+/plugin install claude-hud
+/claude-hud:setup
 /plugin marketplace add limengdu/claude-delegate-tasks-to-codex
 /plugin install cc-codex
+/cc-codex:hud-setup
 ```
 
-**所有项目通用,不用每个项目重装。**
+> **说明:**
+> - [codex-plugin-cc](https://github.com/openai/codex-plugin-cc) — 官方 Codex 插件,提供任务调度和 job 管理
+> - [claude-hud](https://github.com/jarrodwatts/claude-hud) — 状态栏插件,cc-codex 用它显示 Codex 任务进度
+> - 最后执行 `/cc-codex:hud-setup` 把 Codex 状态行挂到 claude-hud 上
+
+安装完重启 Claude Code 即可。**所有项目通用,不用每个项目重装。**
 
 ## 使用
 
@@ -160,16 +169,20 @@ Existing orchestration tools auto-trigger on all tasks, run with unsafe defaults
 
 ## Install
 
-> **Prerequisite:** The [official Codex plugin](https://github.com/openai/codex-plugin-cc) must be installed first. cc-codex is an orchestration layer on top of it.
+> **Prerequisites:** The [official Codex plugin](https://github.com/openai/codex-plugin-cc) and [claude-hud](https://github.com/jarrodwatts/claude-hud) must be installed first.
 
 ```
 /plugin marketplace add openai/codex-plugin-cc
 /plugin install codex
+/plugin marketplace add jarrodwatts/claude-hud
+/plugin install claude-hud
+/claude-hud:setup
 /plugin marketplace add limengdu/claude-delegate-tasks-to-codex
 /plugin install cc-codex
+/cc-codex:hud-setup
 ```
 
-Works in all projects. No per-project setup.
+Restart Claude Code after setup. Works in all projects, no per-project setup.
 
 ## Use
 
