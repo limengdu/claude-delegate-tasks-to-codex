@@ -66,6 +66,7 @@ Otherwise this skill stays dormant. Do not delegate, do not mention Codex.
 ```bash
 DISPATCH="${CLAUDE_PLUGIN_ROOT}/scripts/dispatch.sh"
 WAIT="${CLAUDE_PLUGIN_ROOT}/scripts/wait-done.sh"
+HUD="${CLAUDE_PLUGIN_ROOT}/scripts/hud.sh"
 [[ -x "$DISPATCH" ]] || echo "dispatch.sh missing — reinstall the plugin"
 ```
 
@@ -152,56 +153,50 @@ Independent tasks → dispatch all at once. Dependent tasks → one at a time.
 ## Step 4 — Monitor & Supervise (DO NOT fire-and-forget)
 
 Dispatching is NOT the end of your job. You are a **supervisor**, not a
-mailman. After dispatch, actively monitor each running agent:
+mailman. After dispatch, actively monitor each running agent.
 
-### 4a. Periodic log checks
+### 4a. Launch the HUD
 
-While waiting, periodically check the agent's progress:
+After dispatching all tasks, launch the live dashboard:
 
 ```bash
-tail -n 40 ~/.cc-codex/runs/run-1.log    # check recent output
-"$DISPATCH" --list                        # status of all runs
+HUD="${CLAUDE_PLUGIN_ROOT}/scripts/hud.sh"
+"$HUD"              # watch all runs — auto-exits when all finish
+"$HUD" 1 3          # watch specific runs only
+"$HUD" --once       # print once and exit (for quick status checks)
 ```
 
-Do this every 30–60 seconds for short tasks, or every few minutes for
-longer ones. Do NOT just fire `"$WAIT"` and go idle.
+The HUD refreshes every 3 seconds, showing each task's status, elapsed
+time, description, and current activity (last log line). It exits
+automatically when all tasks finish.
 
-### 4b. Detect and answer Codex's questions
+### 4b. Check logs for questions & deviations
 
-Codex may lack context and ask questions in its log output — things like
-"which file should I modify?", "should this handle X case?", "I'm
-unclear on the requirement for Y."
+While the HUD is running (or between HUD checks), periodically inspect
+logs for problems:
 
-When you spot a question or confusion in the log:
-1. **Read the question carefully.**
-2. **Find the answer from your conversation context with the user** — you
-   have context that Codex does not.
-3. **Re-dispatch with clarification** — write a follow-up task that includes
-   the original spec PLUS the answer to Codex's question.
+```bash
+tail -n 40 ~/.cc-codex/runs/run-1.log    # peek at a specific run
+```
 
-Do NOT ignore questions. Do NOT let Codex guess. Your conversation context
-is Codex's lifeline — you are the bridge between the user and Codex.
+Watch for:
+- **Codex asking questions** — "which file?", "should this handle X?"
+  → Answer by re-dispatching with the original spec PLUS clarification.
+- **Codex going off-track** — wrong file, wrong approach, misunderstanding
+  → For minor drift: note it, address in review.
+  → For major deviation: re-dispatch with a corrected spec immediately.
 
-### 4c. Course-correct on deviation
+Your conversation context is Codex's lifeline — you are the bridge
+between the user and Codex. Do NOT let Codex guess when you have the
+answer.
 
-If you see Codex going off-track in the logs — wrong file, wrong approach,
-misunderstanding the requirement — do NOT wait for it to finish and fail.
-Act early:
-- For minor drift: note it, and plan to address in review.
-- For major deviation (wrong direction entirely): stop waiting, re-dispatch
-  with a corrected, more explicit spec. Wasting Codex's time on a doomed
-  task is worse than re-dispatching.
+### 4c. Fallback: wait-done.sh
 
-### 4d. Wait for completion
+If you need a simpler blocking wait (e.g. for a single run):
 
 ```bash
 "$WAIT" 1     # blocks until run-1 finishes
-"$WAIT" 2
 ```
-
-For parallel runs, issue waits as separate background Bash calls so each
-reports independently. But remember: waiting does NOT replace monitoring.
-Interleave wait with log checks.
 
 ## Step 5 — REVIEW (focus on what matters)
 

@@ -63,7 +63,7 @@ Step 1: Claude 定框架、做架构决策、拆任务（大脑的活）
   ↓
 Step 2-3: Claude 写详细 spec → dispatch.sh 派给 Codex
   ↓
-Step 4: Claude 监工（盯日志、答 Codex 的问题、纠偏）
+Step 4: HUD 实时仪表盘 + Claude 监工（盯进度、答疑、纠偏）
   ↓
 Step 5: Claude 审核（抓大放小,关注致命问题）
   ↓
@@ -89,9 +89,27 @@ Step 6: 派另一个 Codex 验证（对照需求逐项检查）
 
 不是把你那句话直接转发,而是**展开成详细的执行指令**——包含具体要创建的文件、用什么技术、什么数据结构、边界情况怎么处理。Codex 拿到的是**明确的执行命令**,不需要自己做任何设计决策。
 
+### 实时 HUD 仪表盘
+
+派完所有任务后,终端自动显示实时刷新的仪表盘,每 3 秒更新一次:
+
+```
+cc-codex HUD                              14:32:05
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ #1  ✅ done     2m13s  Write auth handler...
+ #2  ⚙  running  1m05s  Investigate test failures...
+     └─ Reading src/tests/auth.test.ts...
+ #3  ⚙  running  0m42s  Refactor database...
+     └─ Modifying db/connection.ts...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ Total: 3  |  Running: 2  |  Done: 1
+```
+
+所有任务完成后仪表盘自动退出,Claude 继续审核。
+
 ### Codex 怎么汇报
 
-靠**退出时写一个标记文件**。`wait-done.sh` 盯着标记,一出现就知道完了。Claude 同时会定期查看日志,如果发现 Codex 跑偏或有疑问,会及时介入纠正。
+靠**退出时写一个标记文件**。Claude 同时通过 HUD 和日志监控进度,发现 Codex 跑偏或有疑问会及时介入纠正。
 
 ### Claude 怎么审核
 
@@ -122,7 +140,8 @@ claude-delegate-tasks-to-codex/
 │       │   └── cc-codex.md          # /cc-codex 命令
 │       ├── scripts/
 │       │   ├── dispatch.sh          # 派活
-│       │   └── wait-done.sh         # 等完成
+│       │   ├── hud.sh               # 实时仪表盘
+│       │   └── wait-done.sh         # 等完成(备用)
 │       └── skills/
 │           └── cc-codex/
 │               └── SKILL.md         # 说明书
@@ -178,7 +197,7 @@ Without the trigger, the skill stays dormant.
 1. **Clarify** — Claude discusses requirements with you before doing anything.
 2. **Architect** — Claude makes design decisions, defines the framework, breaks work into tasks with detailed specs.
 3. **Dispatch** — `dispatch.sh` launches `codex exec` in a tmux pane (if available) or background process.
-4. **Supervise** — Claude monitors logs, answers Codex's questions, course-corrects on deviation.
+4. **Supervise** — Live HUD dashboard shows all task progress. Claude monitors logs, answers Codex's questions, course-corrects on deviation.
 5. **Review** — Claude reads the output, checks for real problems (not nitpicks). Reports ✅/⚠️/❌ per task.
 6. **Verify** — A second Codex agent runs the code, tests edge cases, and checks against original requirements.
 
