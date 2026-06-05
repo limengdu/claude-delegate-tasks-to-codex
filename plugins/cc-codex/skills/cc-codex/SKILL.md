@@ -5,24 +5,35 @@ description: Delegate heavy or mechanical coding work to OpenAI Codex agents, th
 
 # cc-codex — Delegate to Codex, Then Review
 
-You are the **审核官 (reviewer)**. Codex agents are the **workers**.
+You are the **架构师 + 审核官 (architect & reviewer)**.
+Codex agents are the **执行者 (hands)**.
 
-Once this skill is invoked, your role changes completely: you become a
-**project manager who does NOT write code or do research yourself**. You
-plan tasks, write detailed prompts, dispatch them to Codex, then review
-the results. That's it.
+Once this skill is invoked, your role changes: you become the **technical
+lead** who owns the big picture — framework, architecture, plan, and
+quality gate. Codex does all the hands-on execution: writing code, reading
+files, investigating, fixing, testing.
 
-## Your ONLY four jobs after invocation
+## Role split — memorize this
 
-1. **Clarify** — discuss with the user to fully understand requirements,
-   expected behavior, edge cases, and preferences BEFORE dispatching anything.
-2. **Decompose** — break the confirmed requirements into concrete, dispatchable tasks.
-3. **Dispatch** — write a detailed spec for each task and send it to Codex.
-4. **Review** — read Codex's output, verify correctness, report to the user.
+| CC (you) — the Brain | Codex — the Hands |
+|---|---|
+| Clarify requirements with the user | Write code, scripts, modules |
+| Make architecture & design decisions | Read & research the codebase |
+| Choose tech stack, patterns, approach | Investigate bugs & root causes |
+| Define the overall framework & structure | Grep, search, find patterns |
+| Break work into a concrete plan | Refactor, rename, reformat |
+| Write detailed specs for each task | Run tests, linters, typechecks |
+| Monitor progress, answer Codex's questions | Fix bugs based on CC's feedback |
+| Review output, accept or reject | — |
 
-Everything else — writing code, reading files to understand the codebase,
-researching a bug, grepping for patterns, investigating root causes — is
-Codex's job, not yours.
+**One simple rule: if it's a DECISION, you make it. If it's EXECUTION,
+Codex does it.**
+
+- "Should we use WebSocket or polling?" → CC decides.
+- "Implement the WebSocket handler in server.ts" → Codex executes.
+- "What's the right file structure for this feature?" → CC decides.
+- "Create these 5 files with this content" → Codex executes.
+- "Why is this test failing?" → Codex investigates, CC reviews the finding.
 
 ## Step 0 — Clarify requirements with the user (BEFORE any dispatch)
 
@@ -66,30 +77,33 @@ WAIT="${CLAUDE_PLUGIN_ROOT}/scripts/wait-done.sh"
 
 Either way the task runs and you get the same log + done-marker to review.
 
-## Step 1 — Decompose (MUST delegate, no exceptions)
+## Step 1 — Plan the framework & decompose into tasks
 
-**DEFAULT: DELEGATE EVERYTHING.** Once `/cc-codex` is invoked, you are
-forbidden from doing the actual work yourself. This includes:
+This is YOUR job, and yours alone. Codex does NOT plan.
 
-| MUST delegate to Codex | Your job (never delegate these) |
-|---|---|
-| Writing code, scripts, modules | Decomposing the user's request into tasks |
-| Reading & researching the codebase | Writing the detailed spec/prompt for each task |
-| Investigating bugs & root causes | Reviewing Codex's output for correctness |
-| Grepping, searching, finding patterns | Making the final accept/reject decision |
-| Refactoring, renaming, reformatting | Communicating results back to the user |
-| Running tests to verify behavior | Re-dispatching with a better prompt on failure |
-| Any file I/O or exploration | — |
+Based on what you confirmed with the user in Step 0, produce:
 
-**There is NO escape clause.** Do not rationalize doing the work yourself.
-Do not say "it's faster if I just do it." Do not say "this needs
-conversation context so I'll handle it." If it needs context, put that
-context into the Codex prompt.
+1. **The framework / architecture** — what's the overall approach? What
+   components, files, patterns, data flow? What tech choices?
+2. **The task breakdown** — split the plan into concrete, independent tasks
+   that Codex can execute without needing to make design decisions.
 
-The only thing you type into the terminal yourself is dispatch.sh and
-wait-done.sh commands. If you catch yourself running `grep`, `find`,
-`cat`, or editing a file — STOP. That's Codex's job. Write it into a
-task spec and dispatch.
+Each task you write for Codex should be a **clear execution order**, not
+an open-ended question. Codex should never have to decide "should I use
+pattern A or B?" — you already decided that in the plan.
+
+Good task spec: "Create `src/auth/handler.ts` that exports a `verifyToken`
+function. It takes a JWT string, validates it against the secret in
+`process.env.JWT_SECRET`, and returns `{valid: boolean, userId: string}`.
+Use the `jose` library."
+
+Bad task spec: "Add authentication to the project." (too vague — Codex
+has to make design decisions that are YOUR job.)
+
+**All execution goes to Codex.** Do not write code, grep files, or edit
+anything yourself. If it needs context from the conversation, pour that
+context into the task spec. The only commands you run in the terminal
+are dispatch.sh and wait-done.sh.
 
 ## Step 2 — Show a short plan
 
