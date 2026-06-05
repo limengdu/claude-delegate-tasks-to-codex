@@ -61,7 +61,7 @@ Step 1: Claude 定框架、做架构决策、拆任务（大脑的活）
   ↓
 Step 2-3: Claude 写详细 spec → 通过官方插件派给 Codex
   ↓
-Step 4: Claude 用 /codex:status 监工（盯进度、纠偏）
+Step 4: 常驻 HUD 显示 Codex 进度 + Claude 按需检查
   ↓
 Step 5: Claude 审核（抓大放小,关注致命问题）
   ↓
@@ -89,9 +89,19 @@ Step 6: 派另一个 Codex 验证（对照需求逐项检查）
 
 每条任务都自动加上 **CLAUDE.md 覆盖前缀**,告诉 Codex"你是非交互式 agent,直接执行,不要等批准"——避免 Codex 读到用户的 CLAUDE.md 里"先方案后代码"之类的规则后停住。
 
+### 常驻 HUD 状态栏
+
+运行 `/cc-codex:hud-setup` 配置后,当 Codex 任务在跑的时候,你的 statusline 会自动多出一行:
+
+```
+Codex: 2 running, 1 done 3m42s
+```
+
+没有任务时这行自动消失。基于 [claude-hud](https://github.com/jarrodwatts/claude-hud) 的 `--extra-cmd` 扩展接口,不修改 claude-hud 本身。
+
 ### 调度方式
 
-通过官方 `codex-plugin-cc` 的 `codex:codex-rescue` subagent 派活,用 `/codex:status` 查进度,`/codex:result` 取结果。不再使用自定义 shell 脚本。
+通过官方 `codex-plugin-cc` 的 `codex:codex-rescue` subagent 派活,用 `/codex:status` 查进度,`/codex:result` 取结果。
 
 ### Claude 怎么审核
 
@@ -119,7 +129,10 @@ claude-delegate-tasks-to-codex/
 │       ├── .claude-plugin/
 │       │   └── plugin.json
 │       ├── commands/
-│       │   └── cc-codex.md          # /cc-codex 命令
+│       │   ├── cc-codex.md          # /cc-codex 派活命令
+│       │   └── hud-setup.md         # /cc-codex:hud-setup 配置 HUD
+│       ├── scripts/
+│       │   └── codex-hud.sh         # HUD 状态脚本(claude-hud extra-cmd)
 │       └── skills/
 │           └── cc-codex/
 │               └── SKILL.md         # 调度说明书
@@ -177,7 +190,7 @@ Without the trigger, the skill stays dormant.
 1. **Clarify** — Claude discusses requirements with you before doing anything.
 2. **Architect** — Claude makes design decisions, defines the framework, breaks work into tasks with detailed specs.
 3. **Dispatch** — Tasks are sent to Codex via the official `codex:codex-rescue` subagent, with a CLAUDE.md override prefix to prevent stalling.
-4. **Supervise** — Claude monitors progress via `/codex:status`, course-corrects on deviation.
+4. **Supervise** — Persistent HUD statusline shows Codex progress (via claude-hud `--extra-cmd`). Claude checks `/codex:status` on demand.
 5. **Review** — Claude reads the output, checks for real problems (not nitpicks). Reports ✅/⚠️/❌ per task.
 6. **Verify** — A second Codex agent runs the code, tests edge cases, and checks against original requirements.
 

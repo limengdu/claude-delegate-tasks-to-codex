@@ -182,56 +182,46 @@ Agent({
 ## Step 4 — Monitor & Supervise (DO NOT fire-and-forget)
 
 Dispatching is NOT the end of your job. You are a **supervisor**, not a
-mailman. After dispatch, actively monitor each running agent **until the
-task is fully complete**. Do NOT let monitoring stop early.
+mailman.
 
-### 4a. Set up persistent monitoring
+### 4a. Persistent HUD (user-visible, always-on)
 
-Use the Monitor tool with `persistent: true` to watch the Codex job log.
-**NEVER use a fixed timeout** — Codex tasks can take anywhere from 1 minute
-to 30+ minutes. The monitor must run until the task finishes.
+If the user has set up the Codex HUD (via `/cc-codex:hud-setup`), the
+statusline automatically shows Codex task status whenever jobs are
+running — no action needed from you. The user can see progress at all
+times without you doing anything.
 
-```
-Monitor({
-  description: "Codex task progress",
-  persistent: true,
-  timeout_ms: 300000,
-  command: "while true; do python3 -c \"import json,glob; files=sorted(glob.glob('/Users/*/.claude/plugins/data/codex-openai-codex/state/*/jobs/*.json')); [print(json.dumps({k:v for k,v in json.load(open(f)).items() if k in ('id','status','phase','title','summary')})) for f in files[-3:]] if files else print('no jobs')\" 2>/dev/null || echo 'checking...'; sleep 15; done"
-})
-```
+### 4b. Check status on demand
 
-Or more simply, use `/codex:status` in a polling loop:
+Use `/codex:status` to check job progress when you need details:
 
 ```
 Skill({ skill: "codex:status" })
 ```
 
-**Repeat status checks every 30–60 seconds.** Do NOT check once and walk
-away. Keep checking until `/codex:status` shows the job as `completed`
-or `failed`.
+Wait for the foreground Agent call to return (it blocks until Codex
+finishes). For background dispatches, periodically check status:
 
-If the task is taking a long time, tell the user what's happening — e.g.
-"Codex is still working on the auth module (5 minutes elapsed). Latest
-activity: creating test files."
+```
+Skill({ skill: "codex:status", args: "<job-id>" })
+```
 
-### 4b. Course-correct on deviation
+**Do NOT proceed to review until the job is `completed` or `failed`.**
 
-If you see Codex going off-track in the status output — wrong approach,
-misunderstanding the requirement:
+### 4c. Course-correct on deviation
+
+If you see Codex going off-track — wrong approach, misunderstanding:
 - For minor drift: note it, address in review.
 - For major deviation: cancel with `/codex:cancel` and re-dispatch with
   a corrected, more explicit spec.
 
-### 4c. Get results when done
+### 4d. Get results when done
 
 When a job finishes, retrieve the full output:
 
 ```
 Skill({ skill: "codex:result", args: "<job-id>" })
 ```
-
-**Do NOT proceed to review until the job status is `completed` or `failed`.**
-If the status is still `running`, go back to 4a and keep monitoring.
 
 ## Step 5 — REVIEW (focus on what matters)
 
