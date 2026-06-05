@@ -189,74 +189,60 @@ For parallel runs, issue waits as separate background Bash calls so each
 reports independently. But remember: waiting does NOT replace monitoring.
 Interleave wait with log checks.
 
-## Step 5 — REVIEW (critical analysis, not rubber-stamping)
+## Step 5 — REVIEW (focus on what matters)
 
-You are the last line of defense. Codex is a capable worker, but it makes
-mistakes, takes shortcuts, and sometimes produces code that looks correct
-but isn't. **Your job is to catch what Codex missed.**
+Your review should be **pragmatic, not pedantic**. The goal is to catch
+real problems — things that would break, cause security holes, or
+fundamentally miss the user's intent. It is NOT to nitpick style,
+find theoretical edge cases, or write a dissertation on every line.
 
-**Do NOT assume Codex's output is correct.** Approach every result with
-healthy skepticism. A review that says "looks good" without evidence is
-a failed review.
+**Principle: catch killers, skip papercuts.** If the code works, is
+reasonably clean, and has no obvious security or logic flaws — it passes.
+Don't waste time being a perfectionist. Shipping > polishing.
 
-### For EVERY finished run, perform ALL of these checks:
+### Review checklist (quick scan, not exhaustive audit):
 
-**1. Read the full output**
+**1. Read the output**
 - Check the log at `~/.cc-codex/runs/run-<id>.log`
-- For code changes: read `git diff` carefully, line by line
+- For code changes: skim `git diff` — focus on logic, not formatting
 
-**2. Correctness analysis**
-- Does the code/finding actually solve the original problem?
-- Are there logical errors, off-by-one bugs, race conditions?
-- Are edge cases handled (empty input, null, overflow, concurrency)?
-- Did Codex make assumptions that conflict with the user's requirements?
+**2. Sanity check**
+- Does it actually solve the problem the user asked about?
+- Any obvious logic errors or crashes waiting to happen?
+- Any security red flags (hardcoded secrets, injection, auth bypass)?
+- Does it break existing behavior?
 
-**3. Risk assessment**
-- Security: injection, XSS, auth bypass, secret exposure, unsafe deserialization?
-- Performance: O(n²) where O(n) is possible? Memory leaks? Unbounded growth?
-- Reliability: unhandled errors? Silent failures? Missing retries for network calls?
-- Compatibility: does it break existing behavior? API contract changes?
+If the answer is "no issues on any of those" — it passes. Move on.
 
-**4. Code quality check**
-- Does it follow the project's existing patterns and conventions?
-- Are there unnecessary dependencies or over-engineering?
-- Is the naming clear? Would a new developer understand it?
+**3. Only flag issues that matter**
+- Fatal: crashes, data loss, security holes, wrong behavior → reject, re-dispatch
+- Significant: missing important case, wrong API usage → fix yourself (small patch) or re-dispatch
+- Minor: naming, style, theoretical edge case → let it go, or mention briefly
 
-**5. Run deterministic verification**
-- Typecheck, linter, tests — run them yourself (this IS reviewing, not doing work).
-- If tests don't exist for the change, flag this in your report.
+**4. Verdict**
 
-**6. Verdict — with reasoning**
-
-For each run, provide a structured report. NEVER just say "looks good."
-Always explain WHY you accept or reject:
+Keep it short. A one-line verdict is fine for clean results:
 
 ```
 Review
 ────────────────────────────────────────
-✅ run-1  Task A — root cause correctly identified
-   Analysis: Codex found the issue in auth.ts:42 where the token
-   expiry check uses < instead of <=. Verified by reading the spec.
-   Risk: none, isolated one-line fix.
-
-⚠️  run-2  Task B — works but has issues I fixed
-   Analysis: core logic correct, but missing null check on user.email
-   which would crash on guest accounts. I patched it (3 lines).
-   Risk: low after fix.
-
-❌ run-3  Task C — rejected, re-dispatching
-   Analysis: Codex used setTimeout polling instead of WebSocket as
-   specified. Wrong approach entirely — likely misread the spec.
-   Action: re-dispatching with explicit "MUST use WebSocket" constraint.
+✅ run-1  Task A — correct, no issues
+✅ run-2  Task B — works, I tweaked one edge case (null check on user.email)
+❌ run-3  Task C — wrong approach (polling instead of WebSocket), re-dispatching
 ────────────────────────────────────────
 ```
 
-### If the review is for research/investigation:
+Only write a detailed analysis when something is actually wrong or when
+the user explicitly asks for a thorough audit.
 
-- Are the findings factually correct? Cross-check key claims.
-- Are conclusions well-supported, or is Codex speculating?
-- Did Codex miss obvious areas to investigate?
-- Are there alternative explanations Codex didn't consider?
+### For research/investigation results:
+
+- Do the findings make sense? Do they answer the user's question?
+- Is Codex speculating or does it have evidence?
+- Did it miss anything obvious?
+
+Don't over-verify research results — if the reasoning is sound and the
+key claims check out, accept it and move on.
 
 ## Never do
 
@@ -264,8 +250,8 @@ Review
 - Never do the actual work yourself after being invoked.
 - Never gate on or refuse because of tmux.
 - Never raise sandbox to `danger-full-access` on your own.
-- Never skip the review or rubber-stamp Codex's output.
+- Never skip the review — but don't over-review clean results either.
 - Never say "it's faster/easier if I just do it" — always delegate.
 - Never fire-and-forget — monitor Codex while it works.
 - Never ignore questions or confusion in Codex's logs.
-- Never accept code without a risk/bug analysis — "looks good" is not a review.
+- Never nitpick style or theoretical edge cases — focus on real problems.
