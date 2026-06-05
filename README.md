@@ -1,6 +1,6 @@
 # cc-codex
 
-> 让 Claude Code 在你**明确开口时**把编码任务交给 Codex 去做,Claude 负责安排和**审核**。平时它一直躺着,不打扰你。
+> 让 Claude Code 在你**明确开口时**把编码任务交给 Codex 去做。Claude 当**架构师 + 审核官**,负责定框架、列计划、监工、验收;Codex 当**执行者**,负责写代码、查文件、修 bug。平时它一直躺着,不打扰你。
 
 [中文](#中文) | [English](#english)
 
@@ -15,8 +15,9 @@
 | 问题 | 现有工具 | cc-codex |
 |------|---------|----------|
 | **自动抢占** | 装了就接管所有编码任务 | **只在你说了才动** |
+| **AI 自己揽活** | 说了委派还是自己干 | **强制委派,CC 只做决策和审核** |
 | **安全裸奔** | 默认放开整台电脑权限 | **默认只能动当前项目** |
-| **没有审核** | 写完直接交差 | **Claude 亲自审核** |
+| **没有审核** | 写完直接交差 | **CC 审核 + 派 Codex 验证** |
 | **环境依赖** | 没 tmux 就罢工 | **tmux 可选** |
 
 ## 安装(在 Claude Code 里粘两行)
@@ -56,41 +57,48 @@
 ```
 你开口
   ↓
-Claude 规划（拆任务、补全细节、选权限）
+Step 0: Claude 跟你确认需求（聊清楚再动手）
   ↓
-dispatch.sh 把任务交给 Codex（有tmux分屏,没有就后台）
+Step 1: Claude 定框架、做架构决策、拆任务（大脑的活）
   ↓
-Codex 写代码 → 写完发信号
+Step 2-3: Claude 写详细 spec → dispatch.sh 派给 Codex
   ↓
-Claude 审核（跑测试、读代码、对照需求）
+Step 4: Claude 监工（盯日志、答 Codex 的问题、纠偏）
+  ↓
+Step 5: Claude 审核（抓大放小,关注致命问题）
+  ↓
+Step 6: 派另一个 Codex 验证（对照需求逐项检查）
   ↓
 结论: ✅通过 / ⚠️小问题已修 / ❌重派
 ```
 
-## 设计细节
+## 核心设计:谁做什么
 
-### Claude 怎么规划
+| Claude（大脑） | Codex（手） |
+|---|---|
+| 跟用户确认需求 | 写代码、脚本、模块 |
+| 做架构、设计、技术选型 | 读代码、查文件、调研 |
+| 定框架结构、列计划 | 搜索、grep、找问题根因 |
+| 写详细的任务 spec | 重构、修 bug、跑测试 |
+| 监控进度、答疑、纠偏 | 验证其他 Codex 的产出 |
+| 审核产出、最终判定 | — |
 
-收到需求后 Claude 先想三件事:
-1. **该不该给 Codex?** 能独立说清楚的(脚本、工具函数、样板)→ 给。需要对话上下文的 → 自己做。
-2. **能不能并行?** 互不依赖 → 同时派。有依赖 → 一个一个来。
-3. **给多大权限?** 默认 `workspace-write`(只动当前文件夹)。调研用 `read-only`。
+**一句话: 决策归 Claude,执行归 Codex。** Claude 不写代码、不查文件;Codex 不做设计决策。
 
 ### Claude 怎么给 Codex 下命令
 
-不是把你那句话直接转发,而是**展开成详细说明**——补全功能清单、参数、边界情况。写进文件,通过 `dispatch.sh` 交给 Codex。
+不是把你那句话直接转发,而是**展开成详细的执行指令**——包含具体要创建的文件、用什么技术、什么数据结构、边界情况怎么处理。Codex 拿到的是**明确的执行命令**,不需要自己做任何设计决策。
 
 ### Codex 怎么汇报
 
-不靠抓屏幕猜(脆弱),靠 **退出时写一个标记文件**。`wait-done.sh` 盯着标记,一出现就知道完了。
+靠**退出时写一个标记文件**。`wait-done.sh` 盯着标记,一出现就知道完了。Claude 同时会定期查看日志,如果发现 Codex 跑偏或有疑问,会及时介入纠正。
 
 ### Claude 怎么审核
 
-1. **读改了什么** — `git diff` 或直接看文件
-2. **跑真实检查** — 语法检查、执行测试、跑 lint
-3. **对照需求判断** — 功能有没有漏、有没有动不该动的文件
-
-结论:✅通过 / ⚠️小问题自己改了 / ❌理解错了重派。
+1. **读产出** — 看日志、`git diff`
+2. **务实检查** — 有没有致命 bug、安全问题、逻辑错误?没有就放行
+3. **派 Codex 验证** — 让另一个 Codex 实际运行、跑测试、试边缘情况
+4. **最终判定** — ✅通过 / ⚠️小问题自己改了 / ❌重派
 
 ## 卸载
 
@@ -128,15 +136,16 @@ claude-delegate-tasks-to-codex/
 
 # cc-codex (English)
 
-> Let Claude Code delegate coding tasks to Codex agents — **only when you explicitly ask**. Claude plans and **reviews**; Codex executes. Silent by default.
+> Let Claude Code delegate coding tasks to Codex agents — **only when you explicitly ask**. Claude acts as **architect + reviewer** (decisions, planning, quality gate); Codex acts as **executor** (code, research, fixes). Silent by default.
 
 ## Why
 
 Existing orchestration tools auto-trigger on all tasks, run with unsafe defaults, and skip review. cc-codex does the opposite:
 
 - **Explicit trigger only** — `/cc-codex` or "use Codex to…". Never auto-activates.
+- **Forced delegation** — Claude makes decisions and reviews; Codex does all execution. No "I'll just do it myself."
 - **Safe defaults** — `workspace-write` sandbox (current dir only). No auto-dismissing prompts.
-- **Claude reviews** — reads the diff, runs tests/lint, judges against the spec.
+- **Real review** — Claude reviews + dispatches a second Codex agent to verify.
 - **tmux optional** — splits a pane if available; background if not. Never refuses.
 
 ## Install (two commands in Claude Code)
@@ -166,10 +175,12 @@ Without the trigger, the skill stays dormant.
 
 ## How it works
 
-1. **Plan** — Claude splits into subtasks, expands brief requests into detailed specs, picks sandbox per task.
-2. **Dispatch** — `dispatch.sh` launches `codex exec` in a tmux pane (if available) or background process.
-3. **Signal** — Marker file records success/failure on exit. `wait-done.sh` blocks until it appears.
-4. **Review** — Claude reads the diff, runs checks, judges against spec. Reports ✅/⚠️/❌ per task.
+1. **Clarify** — Claude discusses requirements with you before doing anything.
+2. **Architect** — Claude makes design decisions, defines the framework, breaks work into tasks with detailed specs.
+3. **Dispatch** — `dispatch.sh` launches `codex exec` in a tmux pane (if available) or background process.
+4. **Supervise** — Claude monitors logs, answers Codex's questions, course-corrects on deviation.
+5. **Review** — Claude reads the output, checks for real problems (not nitpicks). Reports ✅/⚠️/❌ per task.
+6. **Verify** — A second Codex agent runs the code, tests edge cases, and checks against original requirements.
 
 ## Uninstall
 
