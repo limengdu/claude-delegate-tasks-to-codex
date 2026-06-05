@@ -258,6 +258,44 @@ the user explicitly asks for a thorough audit.
 Don't over-verify research results — if the reasoning is sound and the
 key claims check out, accept it and move on.
 
+## Step 6 — Dispatch verification to Codex
+
+After your own review passes, dispatch a **separate verification task**
+to Codex. This is a different Codex run — not the one that wrote the code.
+Think of it as having a second worker check the first worker's output.
+
+The verification task should:
+- Run the code / feature and confirm it works as expected
+- Check against the user's original requirements (include them in the spec)
+- Run relevant tests, linters, typechecks
+- Try obvious edge cases the user would care about
+- Report: what works, what doesn't, what's missing
+
+```bash
+cat > /tmp/cc-verify.txt <<'TASK'
+Verify the changes from the recent commits. The user's requirements were:
+<paste the original requirements here>
+
+1. Run the code / start the app and confirm the feature works
+2. Run tests: <specific test commands>
+3. Try these edge cases: <list from user's requirements>
+4. Check: does it match the expected behavior described above?
+5. Report: what passes, what fails, what's missing
+TASK
+
+"$DISPATCH" --file /tmp/cc-verify.txt --id 5 --sandbox read-only
+```
+
+Use `read-only` sandbox for verification unless the task requires
+running something that writes files.
+
+After verification completes, read the result and report the final
+status to the user. If verification finds issues, go back to Step 3
+and re-dispatch a fix.
+
+**Skip this step only when** the change is trivially small (one-line fix,
+config tweak) and your Step 5 review already confirmed it's correct.
+
 ## Never do
 
 - Never run without an explicit user invocation.
