@@ -173,29 +173,46 @@ Agent({
 
 ### Dispatch rules
 
-- Independent tasks → dispatch in parallel (multiple Agent calls in one message).
-- Dependent tasks → dispatch sequentially (wait for first to finish).
+- The official Codex broker runs ONE task at a time. Dispatch tasks
+  sequentially: send task 1, wait for it to finish, review, then send task 2.
+- For multiple tasks, interleave dispatch → monitor → review to keep moving.
 - Always include the CLAUDE.md override prefix in every task spec.
 - For write tasks, always add `--write`.
 
 ## Step 4 — Monitor & Supervise (DO NOT fire-and-forget)
 
 Dispatching is NOT the end of your job. You are a **supervisor**, not a
-mailman. After dispatch, actively monitor each running agent.
+mailman. After dispatch, actively monitor each running agent **until the
+task is fully complete**. Do NOT let monitoring stop early.
 
-### 4a. Check status
+### 4a. Set up persistent monitoring
 
-Use the official `/codex:status` command to check all running jobs:
+Use the Monitor tool with `persistent: true` to watch the Codex job log.
+**NEVER use a fixed timeout** — Codex tasks can take anywhere from 1 minute
+to 30+ minutes. The monitor must run until the task finishes.
+
+```
+Monitor({
+  description: "Codex task progress",
+  persistent: true,
+  timeout_ms: 300000,
+  command: "while true; do python3 -c \"import json,glob; files=sorted(glob.glob('/Users/*/.claude/plugins/data/codex-openai-codex/state/*/jobs/*.json')); [print(json.dumps({k:v for k,v in json.load(open(f)).items() if k in ('id','status','phase','title','summary')})) for f in files[-3:]] if files else print('no jobs')\" 2>/dev/null || echo 'checking...'; sleep 15; done"
+})
+```
+
+Or more simply, use `/codex:status` in a polling loop:
 
 ```
 Skill({ skill: "codex:status" })
 ```
 
-Or check a specific job:
+**Repeat status checks every 30–60 seconds.** Do NOT check once and walk
+away. Keep checking until `/codex:status` shows the job as `completed`
+or `failed`.
 
-```
-Skill({ skill: "codex:status", args: "<job-id>" })
-```
+If the task is taking a long time, tell the user what's happening — e.g.
+"Codex is still working on the auth module (5 minutes elapsed). Latest
+activity: creating test files."
 
 ### 4b. Course-correct on deviation
 
@@ -212,6 +229,9 @@ When a job finishes, retrieve the full output:
 ```
 Skill({ skill: "codex:result", args: "<job-id>" })
 ```
+
+**Do NOT proceed to review until the job status is `completed` or `failed`.**
+If the status is still `running`, go back to 4a and keep monitoring.
 
 ## Step 5 — REVIEW (focus on what matters)
 
