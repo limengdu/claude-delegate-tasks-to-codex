@@ -1,6 +1,7 @@
 # cc-codex
 
-> 让 Claude Code 在你**明确开口时**把编码任务交给 Codex 去做。Claude 当**架构师 + 审核官**,负责定框架、列计划、监工、验收;Codex 当**执行者**,负责写代码、查文件、修 bug。平时它一直躺着,不打扰你。
+> Let Claude Code delegate coding tasks to Codex only through an explicit command.
+> Claude plans and reviews; Codex implements.
 
 [中文](#中文) | [English](#english)
 
@@ -8,128 +9,107 @@
 
 <a name="中文"></a>
 
-## 为什么做这个
+## 这是什么
 
-现有的 Claude Code + Codex 编排工具有几个常见问题:
+`cc-codex` 是一个 Claude Code plugin。它的目标很简单：
 
-| 问题 | 现有工具 | cc-codex |
-|------|---------|----------|
-| **自动抢占** | 装了就接管所有编码任务 | **只在你说了才动** |
-| **AI 自己揽活** | 说了委派还是自己干 | **强制委派,CC 只做决策和审核** |
-| **CLAUDE.md 冲突** | Codex 读了"先方案后代码"就停住 | **自动注入前缀,跳过交互式规则** |
-| **没有审核** | 写完直接交差 | **CC 审核 + 派 Codex 验证** |
+- 你用命令明确发起任务。
+- Claude Code 负责澄清需求、拆任务、审查结果。
+- Codex 通过官方 `codex-plugin-cc` 负责编程、查文件、跑测试和修 bug。
+
+一句话：Claude 当审核员和项目负责人，Codex 当真正动手写代码的人。
+
+## 可靠入口
+
+推荐使用完整命名空间命令：
+
+```text
+/cc-codex:cc-codex 帮我在 ./tools 写三个独立脚本: 日志清理、配置校验、健康检查
+```
+
+如果你的 Claude Code `/help` 或自动补全里显示了短别名，也可以按本机显示的短别名使用。但插件命令的官方稳定形式是命名空间命令。
+
+本插件把主命令设置为 `disable-model-invocation: true`，也就是只允许用户手动触发。这样可以避免 Claude 在你没明确授权时自动把任务交给 Codex。
 
 ## 安装
 
-> **前置依赖:** 必须先安装[官方 Codex 插件](https://github.com/openai/codex-plugin-cc)。本插件是在官方插件之上的调度层。
+### 1. 安装官方 Codex plugin
 
-打开 Claude Code,按顺序执行:
-
-```
+```text
 /plugin marketplace add openai/codex-plugin-cc
-/plugin install codex
+/plugin install codex@openai-codex
+/reload-plugins
+/codex:setup
+```
+
+`/codex:setup` 会检查 Codex CLI 是否已安装并已登录。官方 Codex plugin 准备好后，你应该能看到：
+
+- `/codex:rescue`
+- `/codex:status`
+- `/codex:result`
+- `/codex:cancel`
+- `codex:codex-rescue` subagent
+
+### 2. 安装 claude-hud
+
+```text
 /plugin marketplace add jarrodwatts/claude-hud
-/plugin install claude-hud
+/plugin install claude-hud@claude-hud
 /claude-hud:setup
+```
+
+### 3. 安装 cc-codex
+
+```text
 /plugin marketplace add limengdu/claude-delegate-tasks-to-codex
 /plugin install cc-codex
+/reload-plugins
 /cc-codex:hud-setup
 ```
 
-> **说明:**
-> - [codex-plugin-cc](https://github.com/openai/codex-plugin-cc) — 官方 Codex 插件,提供任务调度和 job 管理
-> - [claude-hud](https://github.com/jarrodwatts/claude-hud) — 状态栏插件,cc-codex 用它显示 Codex 任务进度
-> - 最后执行 `/cc-codex:hud-setup` 把 Codex 状态行挂到 claude-hud 上
-
-安装完重启 Claude Code 即可。**所有项目通用,不用每个项目重装。**
-
-## 使用
-
-两种方式随便选:
-
-```
-/cc-codex 帮我在 ./tools 写三个独立脚本:日志清理、配置校验、健康检查
-```
-
-或者直接说大白话:
-
-```
-用 Codex 帮我在 ./tools 写三个独立脚本
-```
-
-**不说,它就一直睡着。** 你正常用 CC 跟没装过一样。
+安装后建议重启 Claude Code。
 
 ## 工作流程
 
+```text
+你运行 /cc-codex:cc-codex <任务>
+  ↓
+Claude 澄清需求、拆任务、写 Codex 任务说明
+  ↓
+Claude 调用 /codex:rescue --fresh --wait
+  ↓
+Codex 查代码、改代码、跑检查
+  ↓
+Claude 查看 Codex 结果和 git diff
+  ↓
+必要时 Claude 再派 Codex 修复
+  ↓
+Claude 派第二个 Codex 做验证
+  ↓
+Claude 给你最终结论
 ```
-你开口
-  ↓
-Step 0: Claude 跟你确认需求（聊清楚再动手）
-  ↓
-Step 1: Claude 定框架、做架构决策、拆任务（大脑的活）
-  ↓
-Step 2-3: Claude 写详细 spec → 通过官方插件派给 Codex
-  ↓
-Step 4: 常驻 HUD 显示 Codex 进度 + Claude 按需检查
-  ↓
-Step 5: Claude 审核（抓大放小,关注致命问题）
-  ↓
-Step 6: 派另一个 Codex 验证（对照需求逐项检查）
-  ↓
-结论: ✅通过 / ⚠️小问题已修 / ❌重派
-```
 
-## 核心设计:谁做什么
+一句话：你只发命令；中间的执行、审查、验证由 Claude + Codex 分工完成。
 
-| Claude（大脑） | Codex（手） |
-|---|---|
-| 跟用户确认需求 | 写代码、脚本、模块 |
-| 做架构、设计、技术选型 | 读代码、查文件、调研 |
-| 定框架结构、列计划 | 搜索、grep、找问题根因 |
-| 写详细的任务 spec | 重构、修 bug、跑测试 |
-| 监控进度、答疑、纠偏 | 验证其他 Codex 的产出 |
-| 审核产出、最终判定 | — |
+## HUD 状态栏
 
-**一句话: 决策归 Claude,执行归 Codex。** Claude 不写代码、不查文件;Codex 不做设计决策。
+运行 `/cc-codex:hud-setup` 后，本插件会给 claude-hud 加一条 Codex 任务状态。例如：
 
-### Claude 怎么给 Codex 下命令
-
-不是把你那句话直接转发,而是**展开成详细的执行指令**——包含具体要创建的文件、用什么技术、什么数据结构、边界情况怎么处理。Codex 拿到的是**明确的执行命令**,不需要自己做任何设计决策。
-
-每条任务都自动加上 **CLAUDE.md 覆盖前缀**,告诉 Codex"你是非交互式 agent,直接执行,不要等批准"——避免 Codex 读到用户的 CLAUDE.md 里"先方案后代码"之类的规则后停住。
-
-### 常驻 HUD 状态栏
-
-运行 `/cc-codex:hud-setup` 配置后,当 Codex 任务在跑的时候,你的 statusline 会自动多出一行:
-
-```
+```text
 Codex: 2 running, 1 done 3m42s
 ```
 
-没有任务时这行自动消失。基于 [claude-hud](https://github.com/jarrodwatts/claude-hud) 的 `--extra-cmd` 扩展接口,不修改 claude-hud 本身。
+HUD setup 不会把某个版本的 plugin cache 路径直接写进 `statusLine`。它会创建一个稳定 wrapper：
 
-### 调度方式
-
-通过官方 `codex-plugin-cc` 的 `codex:codex-rescue` subagent 派活,用 `/codex:status` 查进度,`/codex:result` 取结果。
-
-### Claude 怎么审核
-
-1. **读产出** — `/codex:result`、`git diff`
-2. **务实检查** — 有没有致命 bug、安全问题、逻辑错误?没有就放行
-3. **派 Codex 验证** — 让另一个 Codex 实际运行、跑测试、试边缘情况
-4. **最终判定** — ✅通过 / ⚠️小问题自己改了 / ❌重派
-
-## 卸载
-
-在 Claude Code 里输入:
-
+```text
+~/.claude/cc-codex/codex-hud-wrapper.sh
 ```
-/plugin uninstall cc-codex
-```
+
+这个 wrapper 每次运行时会查找当前安装版本的 `codex-hud.sh`，所以插件升级后更不容易失效。
 
 ## 文件结构
 
-```
+```text
 claude-delegate-tasks-to-codex/
 ├── .claude-plugin/
 │   └── marketplace.json
@@ -138,15 +118,27 @@ claude-delegate-tasks-to-codex/
 │       ├── .claude-plugin/
 │       │   └── plugin.json
 │       ├── commands/
-│       │   ├── cc-codex.md          # /cc-codex 派活命令
-│       │   └── hud-setup.md         # /cc-codex:hud-setup 配置 HUD
+│       │   ├── cc-codex.md          # /cc-codex:cc-codex delegation command
+│       │   └── hud-setup.md         # /cc-codex:hud-setup HUD setup command
 │       ├── scripts/
-│       │   └── codex-hud.sh         # HUD 状态脚本(claude-hud extra-cmd)
+│       │   └── codex-hud.sh         # HUD status script
 │       └── skills/
-│           └── cc-codex/
-│               └── SKILL.md         # 调度说明书
+│           └── workflow-guide/
+│               └── SKILL.md         # hidden internal workflow reference
 ├── README.md
 └── LICENSE
+```
+
+## 卸载
+
+```text
+/plugin uninstall cc-codex
+```
+
+如果也想清理自动安装但不再被依赖的 plugin，可以再运行：
+
+```text
+/plugin prune
 ```
 
 ---
@@ -155,62 +147,86 @@ claude-delegate-tasks-to-codex/
 
 # cc-codex (English)
 
-> Let Claude Code delegate coding tasks to Codex agents — **only when you explicitly ask**. Claude acts as **architect + reviewer** (decisions, planning, quality gate); Codex acts as **executor** (code, research, fixes). Silent by default.
+`cc-codex` is a Claude Code plugin that delegates implementation work to Codex
+through an explicit slash command. Claude Code remains the planner and reviewer;
+Codex does the code editing, repository inspection, test runs, and fixes.
 
-## Why
+## Reliable Entry Point
 
-Existing orchestration tools auto-trigger on all tasks, run with unsafe defaults, and skip review. cc-codex does the opposite:
+Use the full namespaced command:
 
-- **Explicit trigger only** — `/cc-codex` or "use Codex to…". Never auto-activates.
-- **Forced delegation** — Claude makes decisions and reviews; Codex does all execution. No "I'll just do it myself."
-- **CLAUDE.md safe** — Auto-injects a prefix so Codex ignores interactive rules ("plan first, then code") that would cause it to stall.
-- **Real review** — Claude reviews + dispatches a second Codex agent to verify.
-- **Built on official plugin** — Uses `codex-plugin-cc` under the hood for reliable dispatch, status tracking, and job control.
+```text
+/cc-codex:cc-codex write three independent utility scripts in ./tools
+```
+
+If your Claude Code autocomplete shows a shorter alias, you can use what your
+local `/help` displays. The stable plugin command form is namespaced.
+
+The main command uses `disable-model-invocation: true`, so Claude should not
+auto-trigger this workflow from plain conversation.
 
 ## Install
 
-> **Prerequisites:** The [official Codex plugin](https://github.com/openai/codex-plugin-cc) and [claude-hud](https://github.com/jarrodwatts/claude-hud) must be installed first.
+Install and set up the official Codex plugin:
 
-```
+```text
 /plugin marketplace add openai/codex-plugin-cc
-/plugin install codex
+/plugin install codex@openai-codex
+/reload-plugins
+/codex:setup
+```
+
+Install claude-hud:
+
+```text
 /plugin marketplace add jarrodwatts/claude-hud
-/plugin install claude-hud
+/plugin install claude-hud@claude-hud
 /claude-hud:setup
+```
+
+Install cc-codex:
+
+```text
 /plugin marketplace add limengdu/claude-delegate-tasks-to-codex
 /plugin install cc-codex
+/reload-plugins
 /cc-codex:hud-setup
 ```
 
-Restart Claude Code after setup. Works in all projects, no per-project setup.
+Restart Claude Code after setup.
 
-## Use
+## How It Works
 
+1. You run `/cc-codex:cc-codex <task>`.
+2. Claude clarifies requirements and writes a concrete Codex task brief.
+3. Claude dispatches the task with `/codex:rescue --fresh --wait`.
+4. Codex implements and runs relevant checks.
+5. Claude reviews the Codex result and local diff.
+6. Claude dispatches a separate Codex verification run.
+7. Claude reports the final verdict.
+
+## HUD
+
+`/cc-codex:hud-setup` adds a Codex status line to claude-hud through a stable
+wrapper at:
+
+```text
+~/.claude/cc-codex/codex-hud-wrapper.sh
 ```
-/cc-codex write three independent utility scripts in ./tools
-```
 
-or just say:
-
-```
-use Codex to write three utility scripts in ./tools
-```
-
-Without the trigger, the skill stays dormant.
-
-## How it works
-
-1. **Clarify** — Claude discusses requirements with you before doing anything.
-2. **Architect** — Claude makes design decisions, defines the framework, breaks work into tasks with detailed specs.
-3. **Dispatch** — Tasks are sent to Codex via the official `codex:codex-rescue` subagent, with a CLAUDE.md override prefix to prevent stalling.
-4. **Supervise** — Persistent HUD statusline shows Codex progress (via claude-hud `--extra-cmd`). Claude checks `/codex:status` on demand.
-5. **Review** — Claude reads the output, checks for real problems (not nitpicks). Reports ✅/⚠️/❌ per task.
-6. **Verify** — A second Codex agent runs the code, tests edge cases, and checks against original requirements.
+The wrapper finds the currently installed plugin cache path at runtime, so plugin
+updates are less likely to break the HUD.
 
 ## Uninstall
 
-```
+```text
 /plugin uninstall cc-codex
+```
+
+Optionally prune auto-installed dependencies:
+
+```text
+/plugin prune
 ```
 
 ## License

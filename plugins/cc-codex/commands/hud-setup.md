@@ -1,5 +1,6 @@
 ---
 description: Configure the Codex status HUD line (requires claude-hud plugin)
+disable-model-invocation: true
 allowed-tools: Bash, Read, Edit, AskUserQuestion
 ---
 
@@ -16,27 +17,46 @@ claude-hud statusline. It only appears when Codex jobs are running.
 
 2. The `statusLine` value should be a command string that runs claude-hud.
    It looks something like:
-   ```
+
+   ```text
    node /path/to/claude-hud/dist/index.js
    ```
 
-3. Append `--extra-cmd` with the path to the codex-hud script:
-   ```
-   node /path/to/claude-hud/dist/index.js --extra-cmd "${CLAUDE_PLUGIN_ROOT}/scripts/codex-hud.sh"
+3. Create a stable wrapper script at:
+
+   ```text
+   ~/.claude/cc-codex/codex-hud-wrapper.sh
    ```
 
-   Replace `${CLAUDE_PLUGIN_ROOT}` with the actual resolved path to this
-   plugin's root. Find it by running:
+   The wrapper should locate the currently installed cc-codex HUD script inside
+   Claude Code's plugin cache each time it runs, then execute it. This avoids
+   writing a versioned cache path into `statusLine`.
+
    ```bash
-   find ~/.claude/plugins/cache -path "*/cc-codex/scripts/codex-hud.sh" 2>/dev/null
+   #!/usr/bin/env bash
+   set -u
+
+   script=$(find "${HOME}/.claude/plugins/cache" -path "*/cc-codex/scripts/codex-hud.sh" -type f 2>/dev/null | sort | tail -1)
+   [[ -n "${script}" && -x "${script}" ]] || exit 0
+
+   exec "${script}"
    ```
-   Then use the directory two levels up from `scripts/codex-hud.sh`.
 
-4. If no `statusLine` is configured at all, tell the user they need
-   claude-hud installed first: `/plugin install claude-hud` then
-   `/claude-hud:setup`.
+4. Append `--extra-cmd` with the stable wrapper path:
 
-5. If `--extra-cmd` is already present in the statusLine, ask the user
-   if they want to replace it (only one extra-cmd is supported).
+   ```text
+   node /path/to/claude-hud/dist/index.js --extra-cmd "$HOME/.claude/cc-codex/codex-hud-wrapper.sh"
+   ```
 
-6. After updating, tell the user to restart Claude Code for it to take effect.
+5. If no `statusLine` is configured at all, tell the user they need
+   claude-hud installed first:
+
+   ```text
+   /plugin install claude-hud@claude-hud
+   /claude-hud:setup
+   ```
+
+6. If `--extra-cmd` is already present in the statusLine, ask the user if they
+   want to replace it. Only one claude-hud `--extra-cmd` value is supported.
+
+7. After updating, tell the user to restart Claude Code for it to take effect.

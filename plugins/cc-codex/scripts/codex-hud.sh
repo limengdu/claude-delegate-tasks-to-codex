@@ -7,6 +7,45 @@
 
 set -u
 
+# Read one JSON field from a job file.
+# 从任务 JSON 文件中读取一个字段。
+read_json_field() {
+  python3 - "$1" "$2" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+field = sys.argv[2]
+
+try:
+    with open(path, "r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    value = data.get(field, "")
+    if value is not None:
+        print(value)
+except Exception:
+    pass
+PY
+}
+
+# Read the best available start timestamp from a job file.
+# 从任务 JSON 文件中读取可用的开始时间。
+read_job_start() {
+  python3 - "$1" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+
+try:
+    with open(path, "r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    print(data.get("startedAt") or data.get("createdAt") or "")
+except Exception:
+    pass
+PY
+}
+
 # Find the Codex plugin's state directory (codex-plugin-cc stores jobs here)
 find_state_dir() {
   local base="${HOME}/.claude/plugins/data"
@@ -34,26 +73,12 @@ earliest_start=""
 while IFS= read -r job_file; do
   [[ -f "$job_file" ]] || continue
 
-  status=$(python3 -c "
-import json, sys
-try:
-    d = json.load(open('$job_file'))
-    print(d.get('status', ''))
-except:
-    pass
-" 2>/dev/null)
+  status=$(read_json_field "$job_file" status 2>/dev/null)
 
   case "$status" in
     running|queued)
       running=$((running + 1))
-      start=$(python3 -c "
-import json
-try:
-    d = json.load(open('$job_file'))
-    print(d.get('startedAt', d.get('createdAt', '')))
-except:
-    pass
-" 2>/dev/null)
+      start=$(read_job_start "$job_file" 2>/dev/null)
       if [[ -n "$start" && ( -z "$earliest_start" || "$start" < "$earliest_start" ) ]]; then
         earliest_start="$start"
       fi

@@ -5,5 +5,9 @@
   "author": {
     "name": "limengdu",
     "url": "https://github.com/limengdu"
-  }
+  },
+  "dependencies": [
+    "codex@openai-codex",
+    "claude-hud@claude-hud"
+  ]
 }
