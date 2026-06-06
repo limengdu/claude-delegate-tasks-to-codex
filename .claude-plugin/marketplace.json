@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Let Claude Code delegate coding tasks to Codex agents. Explicit trigger only, Claude reviews the results.",
-    "version": "3.0.0"
+    "version": "3.1.0"
   },
   "plugins": [
     {
       "name": "cc-codex",
       "source": "./plugins/cc-codex",
       "description": "Delegate coding tasks to Codex on /cc-codex or by saying 'use Codex to...'. Claude architects and reviews; Codex executes. Built on official codex-plugin-cc.",
-      "version": "3.0.0",
+      "version": "3.1.0",
       "category": "developer tools",
       "keywords": ["codex", "delegation", "review", "subagent", "parallel"]
     }

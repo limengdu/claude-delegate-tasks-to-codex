@@ -52,41 +52,33 @@
 
 ## 安装
 
-### 1. 安装官方 Codex plugin
-
-```text
-/plugin marketplace add openai/codex-plugin-cc
-/plugin install codex@openai-codex
-/reload-plugins
-/codex:setup
-```
-
-`/codex:setup` 会检查 Codex CLI 是否已安装并已登录。官方 Codex plugin 准备好后，你应该能看到：
-
-- `/codex:rescue`
-- `/codex:status`
-- `/codex:result`
-- `/codex:cancel`
-- `codex:codex-rescue` subagent
-
-### 2. 安装 claude-hud
-
-```text
-/plugin marketplace add jarrodwatts/claude-hud
-/plugin install claude-hud@claude-hud
-/claude-hud:setup
-```
-
-### 3. 安装 cc-codex
+### 1. 安装 cc-codex
 
 ```text
 /plugin marketplace add limengdu/claude-delegate-tasks-to-codex
-/plugin install cc-codex
-/reload-plugins
-/cc-codex:hud-setup
+/plugin install cc-codex@cc-codex-marketplace
 ```
 
-安装后建议重启 Claude Code。
+重启 Claude Code，或重新打开一个 Claude Code 会话。
+
+### 2. 运行一键 setup
+
+```text
+/cc-codex:setup
+```
+
+`/cc-codex:setup` 会检查并尽量自动完成：
+
+- Codex CLI
+- 官方 `codex@openai-codex` plugin
+- `claude-hud@claude-hud` plugin
+- 官方 Codex setup 检查
+- cc-codex HUD wrapper
+- Claude Code `statusLine` 配置
+
+如果 Codex CLI 缺失，setup 会先询问你是否允许全局安装。安装或配置完成后，建议重启 Claude Code。
+
+如果你想手动分步配置，也可以分别运行官方 `/codex:setup`、`/claude-hud:setup` 和 `/cc-codex:hud-setup`。
 
 ## 工作流程
 
@@ -159,7 +151,8 @@ claude-delegate-tasks-to-codex/
 │       ├── commands/
 │       │   ├── cc-codex.md          # /cc-codex:cc-codex delegation command
 │       │   ├── handoff.md           # /cc-codex:handoff context handoff command
-│       │   └── hud-setup.md         # /cc-codex:hud-setup HUD setup command
+│       │   ├── hud-setup.md         # /cc-codex:hud-setup HUD setup command
+│       │   └── setup.md             # /cc-codex:setup full setup command
 │       ├── scripts/
 │       │   └── codex-hud.sh         # HUD status script
 │       └── skills/
@@ -227,33 +220,38 @@ auto-trigger this workflow from plain conversation.
 
 ## Install
 
-Install and set up the official Codex plugin:
-
-```text
-/plugin marketplace add openai/codex-plugin-cc
-/plugin install codex@openai-codex
-/reload-plugins
-/codex:setup
-```
-
-Install claude-hud:
-
-```text
-/plugin marketplace add jarrodwatts/claude-hud
-/plugin install claude-hud@claude-hud
-/claude-hud:setup
-```
-
 Install cc-codex:
 
 ```text
 /plugin marketplace add limengdu/claude-delegate-tasks-to-codex
-/plugin install cc-codex
-/reload-plugins
-/cc-codex:hud-setup
+/plugin install cc-codex@cc-codex-marketplace
 ```
 
-Restart Claude Code after setup.
+Restart Claude Code or open a new Claude Code session.
+
+Run the full setup command:
+
+```text
+/cc-codex:setup
+```
+
+`/cc-codex:setup` checks and sets up:
+
+- Codex CLI
+- official `codex@openai-codex` plugin
+- `claude-hud@claude-hud` plugin
+- official Codex setup check
+- cc-codex HUD wrapper
+- Claude Code `statusLine` integration
+
+If Codex CLI is missing, setup asks before installing it globally. Restart Claude
+Code after setup.
+
+For manual setup, run the official `/codex:setup`, `/claude-hud:setup`, and:
+
+```text
+/cc-codex:hud-setup
+```
 
 ## How It Works
 
