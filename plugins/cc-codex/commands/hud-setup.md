@@ -28,18 +28,32 @@ claude-hud statusline. It only appears when Codex jobs are running.
    ~/.claude/cc-codex/codex-hud-wrapper.sh
    ```
 
-   The wrapper should locate the currently installed cc-codex HUD script inside
-   Claude Code's plugin cache each time it runs, then execute it. This avoids
+   The wrapper should locate the current cc-codex HUD script each time it runs,
+   then execute it. It should support both local development with `--plugin-dir`
+   and normal installed plugins from Claude Code's plugin cache. This avoids
    writing a versioned cache path into `statusLine`.
 
    ```bash
    #!/usr/bin/env bash
    set -u
 
-   script=$(find "${HOME}/.claude/plugins/cache" -path "*/cc-codex/scripts/codex-hud.sh" -type f 2>/dev/null | sort | tail -1)
-   [[ -n "${script}" && -x "${script}" ]] || exit 0
+   candidates=()
 
-   exec "${script}"
+   if [[ -n "${PWD:-}" ]]; then
+     while IFS= read -r script; do
+       candidates+=("${script}")
+     done < <(find "${PWD}" -path "*/plugins/cc-codex/scripts/codex-hud.sh" -type f 2>/dev/null | sort -r)
+   fi
+
+   while IFS= read -r script; do
+     candidates+=("${script}")
+   done < <(find "${HOME}/.claude/plugins/cache" -path "*/cc-codex/scripts/codex-hud.sh" -type f 2>/dev/null | sort -r)
+
+   for script in "${candidates[@]}"; do
+     [[ -x "${script}" ]] && exec "${script}"
+   done
+
+   exit 0
    ```
 
 4. Append `--extra-cmd` with the stable wrapper path:

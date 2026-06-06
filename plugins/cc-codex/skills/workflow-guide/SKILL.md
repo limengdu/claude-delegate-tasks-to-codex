@@ -8,12 +8,16 @@ user-invocable: false
 # cc-codex Workflow Guide
 
 This file is kept as a hidden reference. The active user-facing entrypoint is
-the `commands/cc-codex.md` command.
+the `commands/cc-codex.md` command. Use `commands/handoff.md` when Claude Code
+already has enough conversation context and only needs to hand the work to
+Codex.
 
 ## Roles
 
 - Claude owns clarification, architecture, task shaping, review, and final
   acceptance.
+- The handoff command skips new architecture discussion and only compacts the
+  existing conversation context into an implementation brief.
 - Codex owns repository inspection, code changes, test execution, bug fixes, and
   implementation verification.
 
