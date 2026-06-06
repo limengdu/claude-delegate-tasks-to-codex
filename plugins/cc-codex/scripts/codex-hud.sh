@@ -43,7 +43,6 @@ render_label() {
   STATUS_JSON_PAYLOAD="$1" python3 - "$MAX_LABEL_LENGTH" <<'PY'
 import json
 import os
-import re
 import sys
 
 max_length = int(sys.argv[1])
@@ -76,22 +75,6 @@ def shorten(text, limit):
     return text[: limit - 1].rstrip() + "…"
 
 
-def short_id(value):
-    text = clean(value)
-    return text if len(text) <= 8 else text[:8]
-
-
-def compact_time(value):
-    text = clean(value)
-    hour_match = re.fullmatch(r"(\d+)h\s+\d+m", text)
-    if hour_match:
-        return f"{hour_match.group(1)}h"
-    minute_match = re.fullmatch(r"(\d+)m\s+\d+s", text)
-    if minute_match:
-        return f"{minute_match.group(1)}m"
-    return text.replace(" ", "")
-
-
 def join_fields(fields):
     return " | ".join(clean(field) for field in fields if clean(field))
 
@@ -106,28 +89,23 @@ def append_summary(base, summary):
     return base
 
 
-def active_job_label(job, active_count):
+def active_job_label(job):
     kind = first_non_empty(job.get("kindLabel"), job.get("kind"), job.get("jobClass"), "job")
     status = first_non_empty(job.get("status"), "unknown")
     phase = clean(job.get("phase"))
-    elapsed = compact_time(first_non_empty(job.get("elapsed"), job.get("duration")))
+    elapsed = first_non_empty(job.get("elapsed"), job.get("duration"))
     summary = clean(job.get("summary"))
 
-    fields = ["Codex"]
-    if active_count > 1:
-        fields.append(f"{active_count} active")
-    else:
-        fields.append(short_id(job.get("id")))
-    fields.extend([f"{kind}/{status}", phase, elapsed])
+    fields = ["Codex", f"{kind}/{status}", phase, elapsed]
 
     return shorten(append_summary(join_fields(fields), summary), max_length)
 
 
 def finished_job_label(job, section):
     status = first_non_empty(job.get("status"), "unknown")
-    duration = compact_time(first_non_empty(job.get("duration"), job.get("elapsed")))
+    duration = first_non_empty(job.get("duration"), job.get("elapsed"))
     summary = clean(job.get("summary"))
-    base = join_fields(["Codex", section, short_id(job.get("id")), status, duration])
+    base = join_fields(["Codex", section, status, duration])
     return shorten(append_summary(base, summary), max_length)
 
 
@@ -136,7 +114,7 @@ latest = report.get("latestFinished") if isinstance(report.get("latestFinished")
 recent = report.get("recent") if isinstance(report.get("recent"), list) else []
 
 if running:
-    label = active_job_label(running[0], len(running))
+    label = active_job_label(running[0])
 elif latest:
     label = finished_job_label(latest, "latest")
 elif recent:

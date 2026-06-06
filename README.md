@@ -131,12 +131,12 @@ Claude 给你最终结论
 运行 `/cc-codex:hud-setup` 后，本插件会给 claude-hud 加一条常驻 Codex 状态。它读取官方 `/codex:status --json` 背后的同一份状态数据，并压缩成适合状态栏的一行。例如：
 
 ```text
-Codex | 2 active | rescue/running | editing | 4m
-Codex | jobdone1 | completed | 1m
+Codex | rescue/running | editing | 4m 12s
+Codex | latest | completed | 1m 10s
 Codex | idle | direct startup | gate:off
 ```
 
-完整的任务表格、Live details、Latest finished 和 Recent jobs 仍然使用 `/codex:status` 查看；HUD 只保留最适合常驻显示的 Job、Kind、Status、Phase、Elapsed 和 review gate 信息。
+完整的任务表格、Job ID、Live details、Latest finished 和 Recent jobs 仍然使用 `/codex:status` 查看；HUD 只保留最适合常驻显示的 Kind、Status、Phase、Elapsed 和 review gate 信息，并优先保证时间完整显示。
 
 HUD setup 不会把某个版本的 plugin cache 路径直接写进 `statusLine`。它会创建一个稳定 wrapper：
 
@@ -282,15 +282,17 @@ The status line reads the same underlying data as `/codex:status --json`, then
 compresses the status table into a single HUD label such as:
 
 ```text
-Codex | 2 active | rescue/running | editing | 4m
-Codex | jobdone1 | completed | 1m
+Codex | rescue/running | editing | 4m 12s
+Codex | latest | completed | 1m 10s
 Codex | idle | direct startup | gate:off
 ```
 
-Use `/codex:status` for the full table, live details, latest finished job, and
-recent jobs. The wrapper finds a local development plugin first, then the
-installed plugin cache path at runtime, so local testing works and plugin
-updates are less likely to break the HUD.
+Use `/codex:status` for the full table, job IDs, live details, latest finished
+job, and recent jobs. The HUD keeps Kind, Status, Phase, Elapsed, and review
+gate details, prioritizing the full elapsed or duration value. The wrapper finds
+a local development plugin first, then the installed plugin cache path at
+runtime, so local testing works and plugin updates are less likely to break the
+HUD.
 
 ## Uninstall
 
