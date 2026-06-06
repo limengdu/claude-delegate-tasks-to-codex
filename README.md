@@ -128,11 +128,15 @@ Claude 给你最终结论
 
 ## HUD 状态栏
 
-运行 `/cc-codex:hud-setup` 后，本插件会给 claude-hud 加一条 Codex 任务状态。例如：
+运行 `/cc-codex:hud-setup` 后，本插件会给 claude-hud 加一条常驻 Codex 状态。它读取官方 `/codex:status --json` 背后的同一份状态数据，并压缩成适合状态栏的一行。例如：
 
 ```text
-Codex: 2 running, 1 done 3m42s
+Codex | 2 active | rescue/running | editing | 4m
+Codex | jobdone1 | completed | 1m
+Codex | idle | direct startup | gate:off
 ```
+
+完整的任务表格、Live details、Latest finished 和 Recent jobs 仍然使用 `/codex:status` 查看；HUD 只保留最适合常驻显示的 Job、Kind、Status、Phase、Elapsed 和 review gate 信息。
 
 HUD setup 不会把某个版本的 plugin cache 路径直接写进 `statusLine`。它会创建一个稳定 wrapper：
 
@@ -267,16 +271,26 @@ the result, and sends a separate Codex verification run.
 
 ## HUD
 
-`/cc-codex:hud-setup` adds a Codex status line to claude-hud through a stable
-wrapper at:
+`/cc-codex:hud-setup` adds a persistent Codex status line to claude-hud through
+a stable wrapper at:
 
 ```text
 ~/.claude/cc-codex/codex-hud-wrapper.sh
 ```
 
-The wrapper finds a local development plugin first, then the installed plugin
-cache path at runtime, so local testing works and plugin updates are less likely
-to break the HUD.
+The status line reads the same underlying data as `/codex:status --json`, then
+compresses the status table into a single HUD label such as:
+
+```text
+Codex | 2 active | rescue/running | editing | 4m
+Codex | jobdone1 | completed | 1m
+Codex | idle | direct startup | gate:off
+```
+
+Use `/codex:status` for the full table, live details, latest finished job, and
+recent jobs. The wrapper finds a local development plugin first, then the
+installed plugin cache path at runtime, so local testing works and plugin
+updates are less likely to break the HUD.
 
 ## Uninstall
 

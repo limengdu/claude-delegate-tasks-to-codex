@@ -1,118 +1,173 @@
 #!/usr/bin/env bash
-# codex-hud.sh — Outputs Codex job status as JSON for claude-hud's --extra-cmd.
-# When Codex jobs are running: {"label": "Codex: 2 running (1m30s)"}
-# When no jobs are running: outputs nothing (claude-hud hides the line).
+# codex-hud.sh — Outputs Codex status as JSON for claude-hud's --extra-cmd.
+# codex-hud.sh —— 为 claude-hud 的 --extra-cmd 输出 Codex 状态 JSON。
 #
 # Usage: --extra-cmd "/path/to/codex-hud.sh"
 
 set -u
 
-# Read one JSON field from a job file.
-# 从任务 JSON 文件中读取一个字段。
-read_json_field() {
-  python3 - "$1" "$2" <<'PY'
-import json
-import sys
+MAX_LABEL_LENGTH=50
 
-path = sys.argv[1]
-field = sys.argv[2]
-
-try:
-    with open(path, "r", encoding="utf-8") as handle:
-        data = json.load(handle)
-    value = data.get(field, "")
-    if value is not None:
-        print(value)
-except Exception:
-    pass
-PY
-}
-
-# Read the best available start timestamp from a job file.
-# 从任务 JSON 文件中读取可用的开始时间。
-read_job_start() {
-  python3 - "$1" <<'PY'
-import json
-import sys
-
-path = sys.argv[1]
-
-try:
-    with open(path, "r", encoding="utf-8") as handle:
-        data = json.load(handle)
-    print(data.get("startedAt") or data.get("createdAt") or "")
-except Exception:
-    pass
-PY
-}
-
-# Find the Codex plugin's state directory (codex-plugin-cc stores jobs here)
-find_state_dir() {
-  local base="${HOME}/.claude/plugins/data"
-  local dir
-  # codex-openai-codex is the standard data dir name
-  dir=$(find "$base" -maxdepth 1 -name "codex-openai-codex" -type d 2>/dev/null | head -1)
-  if [[ -n "$dir" ]]; then
-    echo "$dir"
+# Find the official Codex companion script used by /codex:status.
+# 查找 /codex:status 背后使用的官方 Codex companion 脚本。
+find_codex_companion() {
+  if [[ -n "${CC_CODEX_HUD_COMPANION:-}" && -f "${CC_CODEX_HUD_COMPANION}" ]]; then
+    echo "${CC_CODEX_HUD_COMPANION}"
     return
   fi
-  # Fallback: any codex-related data dir
-  dir=$(find "$base" -maxdepth 1 -name "*codex*" -type d 2>/dev/null | head -1)
-  [[ -n "$dir" ]] && echo "$dir"
+
+  find "${HOME}/.claude/plugins/cache" \
+    -path "*/openai-codex/codex/*/scripts/codex-companion.mjs" \
+    -type f 2>/dev/null | sort -r | head -1
 }
 
-STATE_BASE=$(find_state_dir)
-[[ -z "$STATE_BASE" ]] && exit 0
-
-# Scan all workspace state dirs for job files
-running=0
-completed=0
-failed=0
-earliest_start=""
-
-while IFS= read -r job_file; do
-  [[ -f "$job_file" ]] || continue
-
-  status=$(read_json_field "$job_file" status 2>/dev/null)
-
-  case "$status" in
-    running|queued)
-      running=$((running + 1))
-      start=$(read_job_start "$job_file" 2>/dev/null)
-      if [[ -n "$start" && ( -z "$earliest_start" || "$start" < "$earliest_start" ) ]]; then
-        earliest_start="$start"
-      fi
-      ;;
-    completed) completed=$((completed + 1)) ;;
-    failed|cancelled) failed=$((failed + 1)) ;;
-  esac
-done < <(find "$STATE_BASE" -path "*/jobs/*.json" -type f 2>/dev/null | sort -r | head -10)
-
-# No running jobs → output nothing (claude-hud hides the line)
-[[ $running -eq 0 ]] && exit 0
-
-# Calculate elapsed time
-elapsed=""
-if [[ -n "$earliest_start" ]]; then
-  start_epoch=$(date -j -f '%Y-%m-%dT%H:%M:%S' "${earliest_start%%.*}" '+%s' 2>/dev/null || \
-                date -d "${earliest_start}" '+%s' 2>/dev/null || echo "")
-  if [[ -n "$start_epoch" ]]; then
-    now_epoch=$(date '+%s')
-    diff=$((now_epoch - start_epoch))
-    if [[ $diff -ge 0 ]]; then
-      m=$((diff / 60))
-      s=$((diff % 60))
-      elapsed=" ${m}m${s}s"
-    fi
+# Find the Codex plugin data directory that stores tracked jobs.
+# 查找保存 Codex 任务状态的插件数据目录。
+find_codex_plugin_data() {
+  if [[ -n "${CLAUDE_PLUGIN_DATA:-}" && -d "${CLAUDE_PLUGIN_DATA}" ]]; then
+    echo "${CLAUDE_PLUGIN_DATA}"
+    return
   fi
+
+  if [[ -d "${HOME}/.claude/plugins/data/codex-openai-codex" ]]; then
+    echo "${HOME}/.claude/plugins/data/codex-openai-codex"
+    return
+  fi
+
+  find "${HOME}/.claude/plugins/data" -maxdepth 1 -name "*codex*" -type d 2>/dev/null | sort -r | head -1
+}
+
+# Convert /codex:status --json data into a compact table-like HUD label.
+# 将 /codex:status --json 数据压缩成类似状态表格的一行 HUD。
+render_label() {
+  STATUS_JSON_PAYLOAD="$1" python3 - "$MAX_LABEL_LENGTH" <<'PY'
+import json
+import os
+import re
+import sys
+
+max_length = int(sys.argv[1])
+
+try:
+    report = json.loads(os.environ.get("STATUS_JSON_PAYLOAD", ""))
+except Exception:
+    print(json.dumps({"label": "Codex: status unavailable"}))
+    raise SystemExit(0)
+
+
+def clean(value):
+    return " ".join(str(value or "").split())
+
+
+def first_non_empty(*values):
+    for value in values:
+        text = clean(value)
+        if text:
+            return text
+    return ""
+
+
+def shorten(text, limit):
+    text = clean(text)
+    if len(text) <= limit:
+        return text
+    if limit <= 1:
+        return text[:limit]
+    return text[: limit - 1].rstrip() + "…"
+
+
+def short_id(value):
+    text = clean(value)
+    return text if len(text) <= 8 else text[:8]
+
+
+def compact_time(value):
+    text = clean(value)
+    hour_match = re.fullmatch(r"(\d+)h\s+\d+m", text)
+    if hour_match:
+        return f"{hour_match.group(1)}h"
+    minute_match = re.fullmatch(r"(\d+)m\s+\d+s", text)
+    if minute_match:
+        return f"{minute_match.group(1)}m"
+    return text.replace(" ", "")
+
+
+def join_fields(fields):
+    return " | ".join(clean(field) for field in fields if clean(field))
+
+
+def append_summary(base, summary):
+    summary = clean(summary)
+    if not summary:
+        return base
+    remaining = max_length - len(base) - 3
+    if remaining >= 8:
+        return f"{base} | {shorten(summary, remaining)}"
+    return base
+
+
+def active_job_label(job, active_count):
+    kind = first_non_empty(job.get("kindLabel"), job.get("kind"), job.get("jobClass"), "job")
+    status = first_non_empty(job.get("status"), "unknown")
+    phase = clean(job.get("phase"))
+    elapsed = compact_time(first_non_empty(job.get("elapsed"), job.get("duration")))
+    summary = clean(job.get("summary"))
+
+    fields = ["Codex"]
+    if active_count > 1:
+        fields.append(f"{active_count} active")
+    else:
+        fields.append(short_id(job.get("id")))
+    fields.extend([f"{kind}/{status}", phase, elapsed])
+
+    return shorten(append_summary(join_fields(fields), summary), max_length)
+
+
+def finished_job_label(job, section):
+    status = first_non_empty(job.get("status"), "unknown")
+    duration = compact_time(first_non_empty(job.get("duration"), job.get("elapsed")))
+    summary = clean(job.get("summary"))
+    base = join_fields(["Codex", section, short_id(job.get("id")), status, duration])
+    return shorten(append_summary(base, summary), max_length)
+
+
+running = report.get("running") if isinstance(report.get("running"), list) else []
+latest = report.get("latestFinished") if isinstance(report.get("latestFinished"), dict) else None
+recent = report.get("recent") if isinstance(report.get("recent"), list) else []
+
+if running:
+    label = active_job_label(running[0], len(running))
+elif latest:
+    label = finished_job_label(latest, "latest")
+elif recent:
+    label = finished_job_label(recent[0], "recent")
+else:
+    runtime = clean((report.get("sessionRuntime") or {}).get("label"))
+    suffix = runtime if runtime else "no jobs"
+    gate = "gate:on" if report.get("needsReview") else "gate:off"
+    label = shorten(join_fields(["Codex", "idle", suffix, gate]), max_length)
+
+print(json.dumps({"label": label}))
+PY
+}
+
+COMPANION=$(find_codex_companion)
+[[ -n "$COMPANION" ]] || {
+  printf '{"label":"Codex: status unavailable"}\n'
+  exit 0
+}
+
+PLUGIN_DATA=$(find_codex_plugin_data)
+
+if [[ -n "$PLUGIN_DATA" ]]; then
+  STATUS_JSON=$(CLAUDE_PLUGIN_DATA="$PLUGIN_DATA" node "$COMPANION" status --json 2>/dev/null || true)
+else
+  STATUS_JSON=$(node "$COMPANION" status --json 2>/dev/null || true)
 fi
 
-# Build label
-parts="$running running"
-[[ $completed -gt 0 ]] && parts="$parts, $completed done"
-[[ $failed -gt 0 ]] && parts="$parts, $failed failed"
+if [[ -z "$STATUS_JSON" ]]; then
+  printf '{"label":"Codex: status unavailable"}\n'
+  exit 0
+fi
 
-label="Codex: ${parts}${elapsed}"
-
-# Output JSON for claude-hud
-printf '{"label":"%s"}\n' "$label"
+render_label "$STATUS_JSON"
