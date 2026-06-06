@@ -15,10 +15,16 @@ $ARGUMENTS
 
 - If `$ARGUMENTS` is empty, ask the user for the task and stop.
 - If the request is ambiguous, ask concise clarifying questions before dispatching.
+- This command applies only to this invocation and the implementation,
+  review, and verification work it starts.
 - You are the architect and reviewer. Codex is the implementer.
 - Do not implement code yourself. Your hands-on work is limited to reading results, checking diffs, running lightweight verification commands, and writing the final review.
 - Use the official Codex plugin command `/codex:rescue` for all implementation work.
 - After Codex finishes, review the result before replying to the user.
+- After the final verdict, treat these cc-codex delegation instructions as
+  complete. Do not continue delegating later plain-language user requests to
+  Codex unless the user explicitly invokes `/cc-codex:cc-codex`,
+  `/cc-codex:handoff`, or another Codex command again.
 
 ## Required dispatch flow
 

@@ -18,10 +18,16 @@ $ARGUMENTS
 - Treat `$ARGUMENTS`, when present, as the user's latest override or final instruction.
 - If the current context does not contain an actionable implementation task, ask one concise question and stop.
 - Do not restart discovery, architecture, or design discussion unless the context is contradictory or unsafe.
+- This command applies only to this invocation and the implementation,
+  review, and verification work it starts.
 - You are the reviewer. Codex is the implementer.
 - Do not implement code yourself. Your hands-on work is limited to reading results, checking diffs, running lightweight verification commands, and writing the final review.
 - Use the official Codex plugin command `/codex:rescue` for all implementation work.
 - After Codex finishes, review the result before replying to the user.
+- After the final verdict, treat these cc-codex delegation instructions as
+  complete. Do not continue delegating later plain-language user requests to
+  Codex unless the user explicitly invokes `/cc-codex:cc-codex`,
+  `/cc-codex:handoff`, or another Codex command again.
 
 ## Required handoff flow
 

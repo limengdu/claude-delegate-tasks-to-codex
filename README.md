@@ -45,10 +45,17 @@
 |---|---|---|
 | `/cc-codex:cc-codex <任务>` | 新任务刚开始 | 澄清、拆任务、派 Codex、审核、验证 |
 | `/cc-codex:handoff [补充]` | 已经聊清楚上下文 | 直接整理当前上下文派 Codex、审核、验证 |
+| `/cc-codex:off` | 想退出 Codex 协作模式 | 后续普通请求默认由 Claude Code 自己处理 |
 
 如果你的 Claude Code `/help` 或自动补全里显示了短别名，也可以按本机显示的短别名使用。但插件命令的官方稳定形式是命名空间命令。
 
-本插件把用户命令设置为 `disable-model-invocation: true`，也就是只允许用户手动触发。这样可以避免 Claude 在你没明确授权时自动把任务交给 Codex。
+本插件把用户命令设置为 `disable-model-invocation: true`，也就是只允许用户手动触发。`/cc-codex:cc-codex` 和 `/cc-codex:handoff` 的协作提示只针对当次命令调用生效；如果当前对话因为前面的话题仍然倾向继续调用 Codex，可以运行：
+
+```text
+/cc-codex:off
+```
+
+`/cc-codex:off` 会明确告诉 Claude Code：从现在开始，后续普通请求默认不要再交给 Codex，除非你再次显式运行 `/cc-codex:cc-codex`、`/cc-codex:handoff` 或其他 Codex 命令。它不会取消已经启动的外部 Codex 任务，只负责纠正当前 Claude Code 对话接下来怎么处理请求。
 
 ## 安装
 
@@ -118,6 +125,14 @@ Claude 给你最终结论
 
 一句话：你只发命令；中间的执行、审查、验证由 Claude + Codex 分工完成。
 
+如果你想退出这种分工，运行：
+
+```text
+/cc-codex:off
+```
+
+一句话：`off` 就像把方向盘交回 Claude Code，后面的普通聊天不再默认派给 Codex。
+
 ## HUD 状态栏
 
 运行 `/cc-codex:hud-setup` 后，本插件会给 claude-hud 加一条常驻 Codex 状态。它读取官方 `/codex:status --json` 背后的同一份状态数据，并压缩成适合状态栏的一行。例如：
@@ -152,6 +167,7 @@ claude-delegate-tasks-to-codex/
 │       │   ├── cc-codex.md          # /cc-codex:cc-codex delegation command
 │       │   ├── handoff.md           # /cc-codex:handoff context handoff command
 │       │   ├── hud-setup.md         # /cc-codex:hud-setup HUD setup command
+│       │   ├── off.md               # /cc-codex:off delegation opt-out command
 │       │   └── setup.md             # /cc-codex:setup full setup command
 │       ├── scripts/
 │       │   └── codex-hud.sh         # HUD status script
@@ -211,12 +227,24 @@ Command choice:
 |---|---|---|
 | `/cc-codex:cc-codex <task>` | Fresh tasks | Clarifies, shapes, dispatches, reviews, verifies |
 | `/cc-codex:handoff [note]` | Already-discussed tasks | Compacts current context, dispatches, reviews, verifies |
+| `/cc-codex:off` | Returning to normal Claude Code behavior | Handles later plain requests directly by default |
 
 If your Claude Code autocomplete shows a shorter alias, you can use what your
 local `/help` displays. The stable plugin command form is namespaced.
 
 The user-facing commands use `disable-model-invocation: true`, so Claude should not
-auto-trigger this workflow from plain conversation.
+auto-trigger this workflow from plain conversation. The delegation prompts in
+`/cc-codex:cc-codex` and `/cc-codex:handoff` are scoped to the current command
+invocation. If the current conversation keeps leaning toward Codex delegation
+because of earlier context, run:
+
+```text
+/cc-codex:off
+```
+
+`/cc-codex:off` tells Claude Code to handle later plain-language requests
+directly unless you explicitly invoke a cc-codex or Codex command again. It does
+not cancel an already-running external Codex job.
 
 ## Install
 

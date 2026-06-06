@@ -20,6 +20,9 @@ Codex.
   existing conversation context into an implementation brief.
 - Codex owns repository inspection, code changes, test execution, bug fixes, and
   implementation verification.
+- cc-codex command instructions are invocation-scoped. After a final verdict,
+  later plain-language user requests should stay in Claude Code unless the user
+  explicitly invokes a cc-codex or Codex command again.
 
 ## Dispatch
 
