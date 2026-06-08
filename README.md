@@ -254,6 +254,7 @@ Install cc-codex:
 ```text
 /plugin marketplace add limengdu/claude-delegate-tasks-to-codex
 /plugin install cc-codex@cc-codex-marketplace
+/reload-plugins
 ```
 
 Restart Claude Code or open a new Claude Code session.
