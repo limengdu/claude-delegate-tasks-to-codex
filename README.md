@@ -64,6 +64,7 @@
 ```text
 /plugin marketplace add limengdu/claude-delegate-tasks-to-codex
 /plugin install cc-codex@cc-codex-marketplace
+/reload-plugins
 ```
 
 重启 Claude Code，或重新打开一个 Claude Code 会话。
