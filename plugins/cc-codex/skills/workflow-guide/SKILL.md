@@ -7,10 +7,13 @@ user-invocable: false
 
 # cc-codex Workflow Guide
 
-This file is kept as a hidden reference. The active user-facing entrypoint is
-the `commands/cc-codex.md` command. Use `commands/handoff.md` when Claude Code
-already has enough conversation context and only needs to hand the work to
-Codex.
+This file is kept as a hidden reference. The active user-facing entrypoints are:
+
+- `commands/once.md` — single-task delegation (one dispatch, then done).
+- `commands/on.md` — persistent delegation mode (all tasks go to Codex until
+  `/cc-codex:off`).
+- `commands/handoff.md` — lightweight handoff when Claude Code already has enough
+  conversation context.
 
 ## Roles
 
@@ -20,9 +23,11 @@ Codex.
   existing conversation context into an implementation brief.
 - Codex owns repository inspection, code changes, test execution, bug fixes, and
   implementation verification.
-- cc-codex command instructions are invocation-scoped. After a final verdict,
+- `/cc-codex:once` instructions are invocation-scoped. After a final verdict,
   later plain-language user requests should stay in Claude Code unless the user
   explicitly invokes a cc-codex or Codex command again.
+- `/cc-codex:on` instructions are session-scoped. All subsequent tasks are
+  delegated to Codex until the user runs `/cc-codex:off`.
 
 ## Dispatch
 

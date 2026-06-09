@@ -13,11 +13,14 @@ $ARGUMENTS
 
 ## Hard contract
 
-- Treat all earlier cc-codex delegation instructions as completed and inactive.
+- If persistent delegation mode (`/cc-codex:on`) is active, exit it immediately.
+- Treat all earlier cc-codex delegation instructions — whether from `/cc-codex:on`,
+  `/cc-codex:once`, `/cc-codex:handoff`, or any other cc-codex command — as
+  completed and inactive.
 - From this point forward, handle later user requests directly in Claude Code by
   default.
 - Do not delegate to Codex, call `/codex:rescue`, or use Codex implementation
-  skills unless the user explicitly invokes `/cc-codex:cc-codex`,
+  skills unless the user explicitly invokes `/cc-codex:once`, `/cc-codex:on`,
   `/cc-codex:handoff`, or another Codex command again.
 - If a Codex job is already running, this command does not cancel that external
   job. It only changes how future user requests in this conversation should be

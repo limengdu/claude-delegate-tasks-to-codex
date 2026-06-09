@@ -21,13 +21,33 @@
 
 ## 可靠入口
 
-推荐使用完整命名空间命令。新任务用主命令：
+推荐使用完整命名空间命令。
+
+### 单次委派：`/cc-codex:once`
+
+新任务用单次命令，完成后自动退出委派模式：
 
 ```text
-/cc-codex:cc-codex 帮我在 ./tools 写三个独立脚本: 日志清理、配置校验、健康检查
+/cc-codex:once 帮我在 ./tools 写三个独立脚本: 日志清理、配置校验、健康检查
 ```
 
-如果你已经和 Claude Code 聊清楚了上下文，只想把当前任务交给 Codex 执行，用轻量交接命令：
+### 持久委派：`/cc-codex:on`
+
+开启后，后续所有任务都交给 Codex 执行，Claude 始终担任审核官，直到你运行 `/cc-codex:off`：
+
+```text
+/cc-codex:on
+```
+
+也可以开启的同时立即指定第一个任务：
+
+```text
+/cc-codex:on 先帮我重构 utils 模块
+```
+
+### 上下文交接：`/cc-codex:handoff`
+
+如果你已经和 Claude Code 聊清楚了上下文，只想把当前任务交给 Codex 执行：
 
 ```text
 /cc-codex:handoff
@@ -39,23 +59,24 @@
 /cc-codex:handoff 按刚才确认的方案实现，完成后跑测试
 ```
 
-区别很简单：
+### 命令对比
 
-| 命令 | 适合场景 | Claude 做什么 |
-|---|---|---|
-| `/cc-codex:cc-codex <任务>` | 新任务刚开始 | 澄清、拆任务、派 Codex、审核、验证 |
-| `/cc-codex:handoff [补充]` | 已经聊清楚上下文 | 直接整理当前上下文派 Codex、审核、验证 |
-| `/cc-codex:off` | 想退出 Codex 协作模式 | 后续普通请求默认由 Claude Code 自己处理 |
+| 命令 | 适合场景 | Claude 做什么 | 持续范围 |
+|---|---|---|---|
+| `/cc-codex:once <任务>` | 单次新任务 | 澄清、拆任务、派 Codex、审核、验证 | 当次命令 |
+| `/cc-codex:on [首个任务]` | 连续多个任务 | 所有后续任务都派 Codex，Claude 审核 | 直到 `/cc-codex:off` |
+| `/cc-codex:handoff [补充]` | 已聊清楚上下文 | 直接整理当前上下文派 Codex、审核、验证 | 当次命令 |
+| `/cc-codex:off` | 退出委派模式 | 后续普通请求默认由 Claude Code 自己处理 | — |
 
 如果你的 Claude Code `/help` 或自动补全里显示了短别名，也可以按本机显示的短别名使用。但插件命令的官方稳定形式是命名空间命令。
 
-本插件把用户命令设置为 `disable-model-invocation: true`，也就是只允许用户手动触发。`/cc-codex:cc-codex` 和 `/cc-codex:handoff` 的协作提示只针对当次命令调用生效；如果当前对话因为前面的话题仍然倾向继续调用 Codex，可以运行：
+本插件把用户命令设置为 `disable-model-invocation: true`，也就是只允许用户手动触发。`/cc-codex:once` 和 `/cc-codex:handoff` 的协作提示只针对当次命令调用生效；`/cc-codex:on` 的协作提示持续到用户显式运行 `/cc-codex:off`。
 
 ```text
 /cc-codex:off
 ```
 
-`/cc-codex:off` 会明确告诉 Claude Code：从现在开始，后续普通请求默认不要再交给 Codex，除非你再次显式运行 `/cc-codex:cc-codex`、`/cc-codex:handoff` 或其他 Codex 命令。它不会取消已经启动的外部 Codex 任务，只负责纠正当前 Claude Code 对话接下来怎么处理请求。
+`/cc-codex:off` 会明确告诉 Claude Code：从现在开始，后续普通请求默认不要再交给 Codex，除非你再次显式运行 `/cc-codex:once`、`/cc-codex:on`、`/cc-codex:handoff` 或其他 Codex 命令。它不会取消已经启动的外部 Codex 任务，只负责纠正当前 Claude Code 对话接下来怎么处理请求。
 
 ## 安装
 
@@ -90,8 +111,10 @@
 
 ## 工作流程
 
+### `/cc-codex:once`（单次委派）
+
 ```text
-你运行 /cc-codex:cc-codex <任务>
+你运行 /cc-codex:once <任务>
   ↓
 Claude 澄清需求、拆任务、写 Codex 任务说明
   ↓
@@ -105,10 +128,24 @@ Claude 查看 Codex 结果和 git diff
   ↓
 Claude 派第二个 Codex 做验证
   ↓
-Claude 给你最终结论
+Claude 给你最终结论（委派自动结束）
 ```
 
-`/cc-codex:handoff` 的流程更短：
+### `/cc-codex:on`（持久委派）
+
+```text
+你运行 /cc-codex:on
+  ↓
+Claude 确认进入持久委派模式
+  ↓
+你发送任务 → Claude 拆任务、派 Codex、审核、验证、给结论
+  ↓
+你发送下一个任务 → Claude 继续派 Codex …（循环）
+  ↓
+你运行 /cc-codex:off → Claude 退出委派模式
+```
+
+### `/cc-codex:handoff`（上下文交接）
 
 ```text
 你运行 /cc-codex:handoff
@@ -121,12 +158,12 @@ Claude 审查结果
   ↓
 Claude 派第二个 Codex 做验证
   ↓
-Claude 给你最终结论
+Claude 给你最终结论（委派自动结束）
 ```
 
 一句话：你只发命令；中间的执行、审查、验证由 Claude + Codex 分工完成。
 
-如果你想退出这种分工，运行：
+如果你想退出委派模式（特别是 `/cc-codex:on` 的持久模式），运行：
 
 ```text
 /cc-codex:off
@@ -165,10 +202,11 @@ claude-delegate-tasks-to-codex/
 │       ├── .claude-plugin/
 │       │   └── plugin.json
 │       ├── commands/
-│       │   ├── cc-codex.md          # /cc-codex:cc-codex delegation command
 │       │   ├── handoff.md           # /cc-codex:handoff context handoff command
 │       │   ├── hud-setup.md         # /cc-codex:hud-setup HUD setup command
 │       │   ├── off.md               # /cc-codex:off delegation opt-out command
+│       │   ├── on.md                # /cc-codex:on persistent delegation mode
+│       │   ├── once.md              # /cc-codex:once single-task delegation
 │       │   └── setup.md             # /cc-codex:setup full setup command
 │       ├── scripts/
 │       │   └── codex-hud.sh         # HUD status script
@@ -203,11 +241,31 @@ Codex does the code editing, repository inspection, test runs, and fixes.
 
 ## Reliable Entry Point
 
-Use the full namespaced command for new tasks:
+### One-shot delegation: `/cc-codex:once`
+
+Use the full namespaced command for a single new task. Control returns to Claude
+after the task is done:
 
 ```text
-/cc-codex:cc-codex write three independent utility scripts in ./tools
+/cc-codex:once write three independent utility scripts in ./tools
 ```
+
+### Persistent delegation: `/cc-codex:on`
+
+Turn on persistent mode — all subsequent tasks are delegated to Codex, with
+Claude acting as the permanent reviewer, until you run `/cc-codex:off`:
+
+```text
+/cc-codex:on
+```
+
+You can also start with a first task immediately:
+
+```text
+/cc-codex:on refactor the utils module first
+```
+
+### Context handoff: `/cc-codex:handoff`
 
 When Claude Code already has enough conversation context, use the lighter
 handoff command:
@@ -222,22 +280,23 @@ You can also add a final override:
 /cc-codex:handoff implement the version we just agreed on and run tests
 ```
 
-Command choice:
+### Command comparison
 
-| Command | Best for | Claude does |
-|---|---|---|
-| `/cc-codex:cc-codex <task>` | Fresh tasks | Clarifies, shapes, dispatches, reviews, verifies |
-| `/cc-codex:handoff [note]` | Already-discussed tasks | Compacts current context, dispatches, reviews, verifies |
-| `/cc-codex:off` | Returning to normal Claude Code behavior | Handles later plain requests directly by default |
+| Command | Best for | Claude does | Scope |
+|---|---|---|---|
+| `/cc-codex:once <task>` | Single new task | Clarifies, shapes, dispatches, reviews, verifies | Current invocation |
+| `/cc-codex:on [first task]` | Multiple consecutive tasks | Delegates all subsequent tasks, reviews each | Until `/cc-codex:off` |
+| `/cc-codex:handoff [note]` | Already-discussed tasks | Compacts current context, dispatches, reviews, verifies | Current invocation |
+| `/cc-codex:off` | Exiting delegation mode | Handles later plain requests directly by default | — |
 
 If your Claude Code autocomplete shows a shorter alias, you can use what your
 local `/help` displays. The stable plugin command form is namespaced.
 
 The user-facing commands use `disable-model-invocation: true`, so Claude should not
-auto-trigger this workflow from plain conversation. The delegation prompts in
-`/cc-codex:cc-codex` and `/cc-codex:handoff` are scoped to the current command
-invocation. If the current conversation keeps leaning toward Codex delegation
-because of earlier context, run:
+auto-trigger this workflow from plain conversation. `/cc-codex:once` and
+`/cc-codex:handoff` delegation prompts are scoped to the current command
+invocation. `/cc-codex:on` delegation persists until the user explicitly runs
+`/cc-codex:off`.
 
 ```text
 /cc-codex:off
@@ -285,13 +344,25 @@ For manual setup, run the official `/codex:setup`, `/claude-hud:setup`, and:
 
 ## How It Works
 
-1. You run `/cc-codex:cc-codex <task>`.
+### `/cc-codex:once` (one-shot)
+
+1. You run `/cc-codex:once <task>`.
 2. Claude clarifies requirements and writes a concrete Codex task brief.
 3. Claude dispatches the task with `/codex:rescue --fresh --wait`.
 4. Codex implements and runs relevant checks.
 5. Claude reviews the Codex result and local diff.
 6. Claude dispatches a separate Codex verification run.
-7. Claude reports the final verdict.
+7. Claude reports the final verdict. Delegation ends.
+
+### `/cc-codex:on` (persistent)
+
+1. You run `/cc-codex:on`.
+2. Claude confirms persistent delegation mode is active.
+3. You send a task → Claude shapes, dispatches, reviews, verifies, reports.
+4. You send the next task → same cycle repeats.
+5. You run `/cc-codex:off` → Claude exits delegation mode.
+
+### `/cc-codex:handoff`
 
 `/cc-codex:handoff` skips new architecture discussion. Claude compacts the
 existing conversation context into a Codex handoff brief, dispatches it, reviews

@@ -26,8 +26,8 @@ $ARGUMENTS
 - After Codex finishes, review the result before replying to the user.
 - After the final verdict, treat these cc-codex delegation instructions as
   complete. Do not continue delegating later plain-language user requests to
-  Codex unless the user explicitly invokes `/cc-codex:cc-codex`,
-  `/cc-codex:handoff`, or another Codex command again.
+  Codex unless the user explicitly invokes `/cc-codex:once`,
+  `/cc-codex:on`, `/cc-codex:handoff`, or another Codex command again.
 
 ## Required handoff flow
 

@@ -1,32 +1,39 @@
 ---
-description: Delegate coding tasks to Codex agent(s). Claude plans, dispatches, then reviews the result.
-argument-hint: <task description, or multiple independent tasks>
+description: Turn on persistent Codex delegation. All subsequent tasks are delegated to Codex until /cc-codex:off is used.
+argument-hint: [optional first task to start immediately]
 disable-model-invocation: true
 allowed-tools: Skill, Bash, Read, Grep, Glob
 ---
 
-You have been explicitly invoked to delegate work to Codex.
+You have been explicitly invoked to enter **persistent cc-codex delegation mode**.
 
-The user's request:
+Optional first task from the user:
 
 $ARGUMENTS
 
 ## Hard contract
 
-- If `$ARGUMENTS` is empty, ask the user for the task and stop.
-- If the request is ambiguous, ask concise clarifying questions before dispatching.
-- This command applies only to this invocation and the implementation,
-  review, and verification work it starts.
-- You are the architect and reviewer. Codex is the implementer.
-- Do not implement code yourself. Your hands-on work is limited to reading results, checking diffs, running lightweight verification commands, and writing the final review.
-- Use the official Codex plugin command `/codex:rescue` for all implementation work.
-- After Codex finishes, review the result before replying to the user.
-- After the final verdict, treat these cc-codex delegation instructions as
-  complete. Do not continue delegating later plain-language user requests to
-  Codex unless the user explicitly invokes `/cc-codex:cc-codex`,
-  `/cc-codex:handoff`, or another Codex command again.
+- From this point forward, you are in persistent delegation mode. Every user
+  message that contains an actionable task must be delegated to Codex. You are the
+  permanent architect and reviewer; Codex is the implementer.
+- Do not implement code yourself. Your hands-on work is limited to reading
+  results, checking diffs, running lightweight verification commands, and writing
+  reviews.
+- This mode stays active across all subsequent user messages in this conversation
+  until the user explicitly runs `/cc-codex:off`.
+- Use the official Codex plugin command `/codex:rescue` for all implementation
+  work.
+- After Codex finishes each task, review the result before replying to the user,
+  then wait for the next task. Do not exit delegation mode after a single task.
+- If a user message is a question, clarification, or non-actionable comment
+  (not an implementation task), answer it directly without dispatching to Codex.
+  Stay in persistent delegation mode.
+- If `$ARGUMENTS` is not empty, treat it as the first task and begin the dispatch
+  flow immediately.
+- If `$ARGUMENTS` is empty, confirm that persistent delegation mode is now active
+  and wait for the user's first task.
 
-## Required dispatch flow
+## Required dispatch flow (apply to every delegated task)
 
 1. Convert the user's request into a concrete implementation brief:
    - goal and acceptance criteria
@@ -77,8 +84,11 @@ Skill({
 
 The verification brief should ask Codex to verify the recent changes against the original request, run relevant tests, and report any missing or broken behavior. It should not ask Codex to redesign the solution.
 
-7. Reply with a short final verdict:
+7. Reply with a short verdict for this task:
    - what Codex changed
    - what you reviewed
    - what the verifier checked
    - any remaining risk or manual step
+
+8. After the verdict, remain in persistent delegation mode. Wait for the next
+   user message. Do not exit delegation mode until the user runs `/cc-codex:off`.
