@@ -1,7 +1,7 @@
 {
   "name": "cc-codex",
   "description": "Delegate coding tasks to Codex agents. Claude plans and reviews; Codex executes. Triggers only when you ask — never auto-activates.",
-  "version": "3.3.0",
+  "version": "3.3.1",
   "author": {
     "name": "limengdu",
     "url": "https://github.com/limengdu"
