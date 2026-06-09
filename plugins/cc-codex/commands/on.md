@@ -11,23 +11,39 @@ Optional first task from the user:
 
 $ARGUMENTS
 
+## Why this mode exists
+
+The user has turned on persistent delegation because Claude output tokens are
+significantly more expensive than Codex. The goal is to minimize cost by
+offloading as much work as possible to Codex. This is not about capability or
+convenience — it is about budget. Even tasks that seem small, trivial, or
+"not worth the overhead" should still go to Codex. Every token Claude spends
+writing code, editing files, running commands, or debugging is money the user
+would rather save.
+
 ## Hard contract
 
-- From this point forward, you are in persistent delegation mode. Every user
-  message that contains an actionable task must be delegated to Codex. You are the
-  permanent architect and reviewer; Codex is the implementer.
-- Do not implement code yourself. Your hands-on work is limited to reading
-  results, checking diffs, running lightweight verification commands, and writing
-  reviews.
+- From this point forward, you are in persistent delegation mode. **Delegate
+  aggressively.** Any user message that involves code reading, code writing, file
+  editing, debugging, testing, refactoring, configuration, script execution, or
+  any repository operation — no matter how small — must be delegated to Codex.
+- You are the architect and reviewer only. Your hands-on work is strictly limited
+  to: shaping the task brief, reading Codex results, checking diffs, and writing
+  the final review verdict. Nothing else.
+- **When in doubt, delegate.** If you are unsure whether something should go to
+  Codex, it should. The only messages you handle directly are pure conversational
+  responses: answering a question about concepts, acknowledging a user comment, or
+  asking a clarifying question. If the answer would require reading files, running
+  commands, or touching code in any way, delegate it to Codex instead.
+- Do not implement code yourself. Do not edit files yourself. Do not run
+  non-trivial commands yourself. Do not "quickly fix" something yourself. These
+  all cost Claude tokens and defeat the purpose of this mode.
 - This mode stays active across all subsequent user messages in this conversation
   until the user explicitly runs `/cc-codex:off`.
 - Use the official Codex plugin command `/codex:rescue` for all implementation
   work.
 - After Codex finishes each task, review the result before replying to the user,
   then wait for the next task. Do not exit delegation mode after a single task.
-- If a user message is a question, clarification, or non-actionable comment
-  (not an implementation task), answer it directly without dispatching to Codex.
-  Stay in persistent delegation mode.
 - If `$ARGUMENTS` is not empty, treat it as the first task and begin the dispatch
   flow immediately.
 - If `$ARGUMENTS` is empty, confirm that persistent delegation mode is now active
