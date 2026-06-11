@@ -31,11 +31,16 @@ This file is kept as a hidden reference. The active user-facing entrypoints are:
 
 ## Dispatch
 
-Use the official Codex plugin through `/codex:rescue --fresh --wait`.
+Use the Codex companion script directly via Bash:
+`node codex-companion.mjs task --background --write --fresh "<envelope>"`.
 
-Every delegated task must start with the non-interactive envelope from
-`commands/cc-codex.md` so Codex does the work directly instead of waiting for a
-separate approval step.
+Every delegated task uses a non-interactive envelope so Codex does the work
+directly instead of waiting for a separate approval step.
+
+After dispatch, two parallel watchers run: a completion listener
+(`companion status <job-id> --wait`) and a health-check monitor
+(`codex-watchdog.sh` every 10 minutes). If the health check triggers, Claude
+reads the Codex log file and decides whether to wait, re-dispatch, or take over.
 
 ## Review
 

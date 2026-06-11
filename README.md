@@ -118,9 +118,13 @@
   ↓
 Claude 澄清需求、拆任务、写 Codex 任务说明
   ↓
-Claude 调用 /codex:rescue --fresh --wait
+Claude 通过 companion 后台启动 Codex 任务
   ↓
 Codex 查代码、改代码、跑检查
+  ├─ 完成监听：任务一结束立刻通知 Claude
+  └─ 健康监控：每 10 分钟 Claude 读 Codex 日志、判断有没有卡住
+     ├─ 正常推进 → 继续等待
+     └─ 卡住 → 成本优先决策（取消 / 重新派发 / Claude 接管）
   ↓
 Claude 查看 Codex 结果和 git diff
   ↓
@@ -138,7 +142,7 @@ Claude 给你最终结论（委派自动结束）
   ↓
 Claude 确认进入持久委派模式
   ↓
-你发送任务 → Claude 拆任务、派 Codex、审核、验证、给结论
+你发送任务 → Claude 拆任务、派 Codex（含健康监控）、审核、验证、给结论
   ↓
 你发送下一个任务 → Claude 继续派 Codex …（循环）
   ↓
@@ -152,7 +156,7 @@ Claude 确认进入持久委派模式
   ↓
 Claude 把当前对话上下文整理成 Codex 工单
   ↓
-Codex 直接实现
+Codex 后台实现（含健康监控）
   ↓
 Claude 审查结果
   ↓
@@ -162,6 +166,21 @@ Claude 给你最终结论（委派自动结束）
 ```
 
 一句话：你只发命令；中间的执行、审查、验证由 Claude + Codex 分工完成。
+
+### 健康监控（Watchdog）
+
+每次派任务给 Codex 时，cc-codex 会自动启动两个并行监控：
+
+- **完成监听**：Codex 任务一完成就立刻通知 Claude，不用轮询。
+- **健康检查**：每 10 分钟触发一次，Claude 会去读 Codex 的实际运行日志，用自己的判断力分析 Codex 是在正常推进还是卡住了。
+
+当 Claude 判定 Codex 卡住时，按**成本优先原则**选择行动：
+
+| 决策 | 适用条件 | 行为 |
+|---|---|---|
+| **取消** | 已重试 2+ 次、根本性障碍（权限/环境/能力不足） | 取消任务，通知用户 |
+| **重新派发** | 第一二次卡住、可通过精简任务绕过卡点 | 取消后用优化的 brief 重新派 |
+| **Claude 接管** | 剩余工作量小、重试成本 > 直接实现成本 | 取消后 Claude 自己完成 |
 
 如果你想退出委派模式（特别是 `/cc-codex:on` 的持久模式），运行：
 
@@ -209,7 +228,8 @@ claude-delegate-tasks-to-codex/
 │       │   ├── once.md              # /cc-codex:once single-task delegation
 │       │   └── setup.md             # /cc-codex:setup full setup command
 │       ├── scripts/
-│       │   └── codex-hud.sh         # HUD status script
+│       │   ├── codex-hud.sh         # HUD status script
+│       │   └── codex-watchdog.sh    # Health-check timer for Monitor tool
 │       └── skills/
 │           └── workflow-guide/
 │               └── SKILL.md         # hidden internal workflow reference
@@ -348,8 +368,13 @@ For manual setup, run the official `/codex:setup`, `/claude-hud:setup`, and:
 
 1. You run `/cc-codex:once <task>`.
 2. Claude clarifies requirements and writes a concrete Codex task brief.
-3. Claude dispatches the task with `/codex:rescue --fresh --wait`.
-4. Codex implements and runs relevant checks.
+3. Claude dispatches the task as a background Codex job.
+4. Codex implements and runs relevant checks. Meanwhile:
+   - A **completion listener** notifies Claude the moment the task finishes.
+   - A **health-check monitor** triggers every 10 minutes — Claude reads the
+     Codex logs and assesses whether Codex is stuck or progressing.
+   - If stuck: Claude applies a cost-based decision (cancel / re-dispatch /
+     take over).
 5. Claude reviews the Codex result and local diff.
 6. Claude dispatches a separate Codex verification run.
 7. Claude reports the final verdict. Delegation ends.
@@ -358,15 +383,34 @@ For manual setup, run the official `/codex:setup`, `/claude-hud:setup`, and:
 
 1. You run `/cc-codex:on`.
 2. Claude confirms persistent delegation mode is active.
-3. You send a task → Claude shapes, dispatches, reviews, verifies, reports.
+3. You send a task → Claude shapes, dispatches (with health monitoring),
+   reviews, verifies, reports.
 4. You send the next task → same cycle repeats.
 5. You run `/cc-codex:off` → Claude exits delegation mode.
 
 ### `/cc-codex:handoff`
 
 `/cc-codex:handoff` skips new architecture discussion. Claude compacts the
-existing conversation context into a Codex handoff brief, dispatches it, reviews
-the result, and sends a separate Codex verification run.
+existing conversation context into a Codex handoff brief, dispatches it (with
+health monitoring), reviews the result, and sends a separate Codex verification
+run.
+
+### Health Monitoring (Watchdog)
+
+Every dispatched Codex task automatically gets two parallel watchers:
+
+- **Completion listener**: instant notification when the task finishes.
+- **Health-check monitor**: every 10 minutes, Claude reads the actual Codex
+  log file and uses its own judgment to determine whether Codex is stuck.
+
+When Claude determines Codex is stuck, it chooses an action based on
+**cost minimization** (Codex tokens + Claude tokens + user wait time):
+
+| Decision | When | Action |
+|---|---|---|
+| **Cancel** | 2+ retries already, or fundamental blocker | Cancel and inform user |
+| **Re-dispatch** | 1st/2nd stuck, addressable issue | Cancel, refine brief, retry |
+| **Take over** | Small remaining work, cheaper to finish directly | Cancel, Claude implements |
 
 ## HUD
 
