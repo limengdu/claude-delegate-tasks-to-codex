@@ -192,7 +192,7 @@ Claude 给你最终结论（委派自动结束）
 
 ## HUD 状态栏
 
-运行 `/cc-codex:hud-setup` 后，本插件会给 claude-hud 加一条常驻 Codex 状态。它读取官方 `/codex:status --json` 背后的同一份状态数据，并压缩成适合状态栏的一行。例如：
+本插件会在 Claude Code 会话启动时自动配置 claude-hud 的 Codex 状态行，无需手动运行 `/cc-codex:hud-setup` 或 `/cc-codex:setup`。它读取官方 `/codex:status --json` 背后的同一份状态数据，并压缩成适合状态栏的一行。例如：
 
 ```text
 Codex | rescue/running | editing | 4m 12s
@@ -219,6 +219,8 @@ claude-delegate-tasks-to-codex/
 ├── plugins/
 │   └── cc-codex/
 │       ├── .claude-plugin/
+│       │   ├── hooks/
+│       │   │   └── hooks.json          # SessionStart hook for auto HUD config
 │       │   └── plugin.json
 │       ├── commands/
 │       │   ├── handoff.md           # /cc-codex:handoff context handoff command
@@ -229,7 +231,8 @@ claude-delegate-tasks-to-codex/
 │       │   └── setup.md             # /cc-codex:setup full setup command
 │       ├── scripts/
 │       │   ├── codex-hud.sh         # HUD status script
-│       │   └── codex-watchdog.sh    # Health-check timer for Monitor tool
+│       │   ├── codex-watchdog.sh    # Health-check timer for Monitor tool
+│       │   └── session-start-hook.sh # Auto-configure HUD on session start
 │       └── skills/
 │           └── workflow-guide/
 │               └── SKILL.md         # hidden internal workflow reference
@@ -414,8 +417,9 @@ When Claude determines Codex is stuck, it chooses an action based on
 
 ## HUD
 
-`/cc-codex:hud-setup` adds a persistent Codex status line to claude-hud through
-a stable wrapper at:
+The plugin automatically configures the Codex status line in claude-hud on
+session start — no need to manually run `/cc-codex:hud-setup` or `/cc-codex:setup`.
+The status line is rendered through a stable wrapper at:
 
 ```text
 ~/.claude/cc-codex/codex-hud-wrapper.sh
