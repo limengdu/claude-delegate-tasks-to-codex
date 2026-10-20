@@ -31,21 +31,20 @@ This file is kept as a hidden reference. The active user-facing entrypoints are:
 
 ## Dispatch
 
-Use the Codex companion script directly via Bash:
-`node codex-companion.mjs task --background --write --fresh "<envelope>"`.
+Helpers in `~/.claude/cc-codex/bin` (written by the session-start hook):
 
-Every delegated task uses a non-interactive envelope so Codex does the work
-directly instead of waiting for a separate approval step.
-
-After dispatch, two parallel watchers run: a completion listener
-(`companion status <job-id> --wait`) and a health-check monitor
-(`codex-watchdog.sh` every 10 minutes). If the health check triggers, Claude
-reads the Codex log file and decides whether to wait, re-dispatch, or take over.
+- `codex-task --brief <file> [--kind verify] [--resume]` wraps the brief in the
+  non-interactive envelope and starts a background job through the official
+  companion.
+- `codex-wait <job-id>` blocks until the job ends and prints a compact report:
+  status, Codex's final message, changed files.
+- `codex-watchdog --job-id <id>` stays silent while Codex progresses and prints
+  `STUCK|...` only when the log stalls or an error repeats.
+- `codex-cancel <job-id>` cancels a job.
 
 ## Review
 
-After Codex returns, Claude should inspect the reported result and local diff,
-then either accept it, dispatch a focused fix, or report a clear blocker.
-
-When the implementation review passes, Claude should run one separate Codex
-verification pass before giving the final user-facing verdict.
+Claude starts from the `codex-wait` report, runs the acceptance commands, and
+reads code only where it matters. Fixes go back to the same Codex thread with
+`codex-task --resume`. A separate Codex verification run (`--kind verify`) is
+used when the acceptance commands cannot cover the change.

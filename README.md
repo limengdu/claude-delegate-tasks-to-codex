@@ -82,8 +82,14 @@
 
 ### 1. 安装 cc-codex
 
+cc-codex 依赖官方 `codex@openai-codex` 和 `claude-hud@claude-hud` 两个插件，先添加它们的 marketplace，再一起安装：
+
 ```text
+/plugin marketplace add openai/codex-plugin-cc
+/plugin marketplace add jarrodwatts/claude-hud
 /plugin marketplace add limengdu/claude-delegate-tasks-to-codex
+/plugin install codex@openai-codex
+/plugin install claude-hud@claude-hud
 /plugin install cc-codex@cc-codex-marketplace
 /reload-plugins
 ```
@@ -121,16 +127,15 @@ Claude 澄清需求、拆任务、写 Codex 任务说明
 Claude 通过 companion 后台启动 Codex 任务
   ↓
 Codex 查代码、改代码、跑检查
-  ├─ 完成监听：任务一结束立刻通知 Claude
-  └─ 健康监控：每 10 分钟 Claude 读 Codex 日志、判断有没有卡住
-     ├─ 正常推进 → 继续等待
-     └─ 卡住 → 成本优先决策（取消 / 重新派发 / Claude 接管）
+  ├─ 完成监听：任务一结束，把精简报告（状态 + Codex 总结 + 改动文件）交给 Claude
+  └─ 卡死报警：脚本静默盯着日志，只有疑似卡住才叫醒 Claude
+     └─ 卡住 → 成本优先决策（继续等 / 重新派发 / 取消 / Claude 接管）
   ↓
-Claude 查看 Codex 结果和 git diff
+Claude 跑验收命令，只细看出问题的、关键的或意料之外的文件
   ↓
-必要时 Claude 再派 Codex 修复
+有问题 → 反馈发回同一个 Codex 会话修复
   ↓
-Claude 派第二个 Codex 做验证
+验收命令覆盖不到时，再派一个 Codex 做独立验证
   ↓
 Claude 给你最终结论（委派自动结束）
 ```
@@ -142,7 +147,7 @@ Claude 给你最终结论（委派自动结束）
   ↓
 Claude 确认进入持久委派模式
   ↓
-你发送任务 → Claude 拆任务、派 Codex（含健康监控）、审核、验证、给结论
+你发送任务 → Claude 拆任务、派 Codex（含卡死报警）、审核、验证、给结论
   ↓
 你发送下一个任务 → Claude 继续派 Codex …（循环）
   ↓
@@ -156,25 +161,25 @@ Claude 确认进入持久委派模式
   ↓
 Claude 把当前对话上下文整理成 Codex 工单
   ↓
-Codex 后台实现（含健康监控）
+Codex 后台实现（含卡死报警）
   ↓
-Claude 审查结果
+Claude 跑验收、审查结果，有问题发回同一个 Codex 会话修复
   ↓
-Claude 派第二个 Codex 做验证
+验收命令覆盖不到时，再派一个 Codex 做独立验证
   ↓
 Claude 给你最终结论（委派自动结束）
 ```
 
 一句话：你只发命令；中间的执行、审查、验证由 Claude + Codex 分工完成。
 
-### 健康监控（Watchdog）
+### 完成监听与卡死报警（Watchdog）
 
 每次派任务给 Codex 时，cc-codex 会自动启动两个并行监控：
 
-- **完成监听**：Codex 任务一完成就立刻通知 Claude，不用轮询。
-- **健康检查**：每 10 分钟触发一次，Claude 会去读 Codex 的实际运行日志，用自己的判断力分析 Codex 是在正常推进还是卡住了。
+- **完成监听**：Codex 任务一结束就通知 Claude，并附上精简报告：最终状态、Codex 的总结、工作区改动文件。
+- **卡死报警**：脚本每分钟静默检查一次。日志 15 分钟没有新内容，或同一条错误反复出现时，才叫醒 Claude 去看最近的日志。
 
-当 Claude 判定 Codex 卡住时，按**成本优先原则**选择行动：
+Codex 正常推进时 Claude 不会被打扰。确认卡住后，Claude 按**成本优先原则**选择行动：
 
 | 决策 | 适用条件 | 行为 |
 |---|---|---|
@@ -219,9 +224,9 @@ claude-delegate-tasks-to-codex/
 ├── plugins/
 │   └── cc-codex/
 │       ├── .claude-plugin/
-│       │   ├── hooks/
-│       │   │   └── hooks.json          # SessionStart hook for auto HUD config
 │       │   └── plugin.json
+│       ├── hooks/
+│       │   └── hooks.json           # SessionStart hook: helpers + HUD config
 │       ├── commands/
 │       │   ├── handoff.md           # /cc-codex:handoff context handoff command
 │       │   ├── hud-setup.md         # /cc-codex:hud-setup HUD setup command
@@ -230,9 +235,13 @@ claude-delegate-tasks-to-codex/
 │       │   ├── once.md              # /cc-codex:once single-task delegation
 │       │   └── setup.md             # /cc-codex:setup full setup command
 │       ├── scripts/
+│       │   ├── codex-cancel.sh      # Cancel a Codex job
 │       │   ├── codex-hud.sh         # HUD status script
-│       │   ├── codex-watchdog.sh    # Health-check timer for Monitor tool
-│       │   └── session-start-hook.sh # Auto-configure HUD on session start
+│       │   ├── codex-task.sh        # Dispatch a brief as a background Codex job
+│       │   ├── codex-wait.sh        # Wait for a job, print a compact report
+│       │   ├── codex-watchdog.sh    # Stall alarm for the Monitor tool
+│       │   ├── lib.sh               # Shared path resolution
+│       │   └── session-start-hook.sh # Write helpers to ~/.claude/cc-codex/bin, configure HUD
 │       └── skills/
 │           └── workflow-guide/
 │               └── SKILL.md         # hidden internal workflow reference
@@ -331,10 +340,14 @@ not cancel an already-running external Codex job.
 
 ## Install
 
-Install cc-codex:
+cc-codex depends on the official `codex@openai-codex` plugin and `claude-hud@claude-hud`. Add their marketplaces, then install all three:
 
 ```text
+/plugin marketplace add openai/codex-plugin-cc
+/plugin marketplace add jarrodwatts/claude-hud
 /plugin marketplace add limengdu/claude-delegate-tasks-to-codex
+/plugin install codex@openai-codex
+/plugin install claude-hud@claude-hud
 /plugin install cc-codex@cc-codex-marketplace
 /reload-plugins
 ```
@@ -373,20 +386,21 @@ For manual setup, run the official `/codex:setup`, `/claude-hud:setup`, and:
 2. Claude clarifies requirements and writes a concrete Codex task brief.
 3. Claude dispatches the task as a background Codex job.
 4. Codex implements and runs relevant checks. Meanwhile:
-   - A **completion listener** notifies Claude the moment the task finishes.
-   - A **health-check monitor** triggers every 10 minutes — Claude reads the
-     Codex logs and assesses whether Codex is stuck or progressing.
-   - If stuck: Claude applies a cost-based decision (cancel / re-dispatch /
-     take over).
-5. Claude reviews the Codex result and local diff.
-6. Claude dispatches a separate Codex verification run.
+   - A **completion listener** hands Claude a compact report when the task
+     ends: status, Codex's summary, changed files.
+   - A **stall alarm** watches the log silently and wakes Claude only when
+     Codex looks stuck; Claude then applies a cost-based decision.
+5. Claude runs the acceptance commands and reads only the files that need
+   attention. Fixes go back to the same Codex thread.
+6. When the acceptance commands cannot cover the change, Claude dispatches a
+   separate Codex verification run.
 7. Claude reports the final verdict. Delegation ends.
 
 ### `/cc-codex:on` (persistent)
 
 1. You run `/cc-codex:on`.
 2. Claude confirms persistent delegation mode is active.
-3. You send a task → Claude shapes, dispatches (with health monitoring),
+3. You send a task → Claude shapes, dispatches (with stall alarm),
    reviews, verifies, reports.
 4. You send the next task → same cycle repeats.
 5. You run `/cc-codex:off` → Claude exits delegation mode.
@@ -395,16 +409,18 @@ For manual setup, run the official `/codex:setup`, `/claude-hud:setup`, and:
 
 `/cc-codex:handoff` skips new architecture discussion. Claude compacts the
 existing conversation context into a Codex handoff brief, dispatches it (with
-health monitoring), reviews the result, and sends a separate Codex verification
-run.
+stall alarm), reviews the result, and sends a separate Codex verification run
+when the acceptance commands cannot cover the change.
 
-### Health Monitoring (Watchdog)
+### Completion Listener and Stall Alarm (Watchdog)
 
 Every dispatched Codex task automatically gets two parallel watchers:
 
-- **Completion listener**: instant notification when the task finishes.
-- **Health-check monitor**: every 10 minutes, Claude reads the actual Codex
-  log file and uses its own judgment to determine whether Codex is stuck.
+- **Completion listener**: notifies Claude when the task ends, with a compact
+  report (status, Codex's summary, changed files).
+- **Stall alarm**: a script checks quietly every minute and wakes Claude only
+  when the log has been silent for 15 minutes or the same error keeps
+  repeating. Claude then reads the recent log lines.
 
 When Claude determines Codex is stuck, it chooses an action based on
 **cost minimization** (Codex tokens + Claude tokens + user wait time):

@@ -21,207 +21,91 @@ $ARGUMENTS
 - This command applies only to this invocation and the implementation,
   review, and verification work it starts.
 - You are the reviewer. Codex is the implementer.
-- Do not implement code yourself. Your hands-on work is limited to reading results, checking diffs, running lightweight verification commands, and writing the final review.
+- Do not implement code yourself. Your hands-on work is limited to reading results, checking diffs, running the acceptance commands, and writing the final review.
 - After Codex finishes, review the result before replying to the user.
 - After the final verdict, treat these cc-codex delegation instructions as
   complete. Do not continue delegating later plain-language user requests to
   Codex unless the user explicitly invokes `/cc-codex:once`,
   `/cc-codex:on`, `/cc-codex:handoff`, or another Codex command again.
 
-## Required handoff flow
+## Helpers
 
-1. Build a compact handoff brief from the current context:
-   - implementation goal
-   - latest user instruction or override
+All helpers live in `~/.claude/cc-codex/bin` (written at session start). If that directory is
+missing, tell the user to restart Claude Code and stop.
+
+## Dispatch flow
+
+1. Build a compact handoff brief from the current context. Keep it practical
+   and skip new architecture planning:
+   - implementation goal and the latest user instruction or override
    - files or areas already discussed
    - constraints already agreed
-   - acceptance checks already discussed
+   - acceptance checks already discussed (exact commands)
 
-   Keep this brief practical. Do not add a new architecture plan.
-
-2. Locate the Codex companion script and plugin data directory:
-
-```bash
-CODEX_COMPANION=$(find "$HOME/.claude/plugins/cache" \
-  -path "*/openai-codex/codex/*/scripts/codex-companion.mjs" \
-  -type f 2>/dev/null | sort -r | head -1)
-
-CODEX_PLUGIN_DATA=""
-if [[ -d "${HOME}/.claude/plugins/data/codex-openai-codex" ]]; then
-  CODEX_PLUGIN_DATA="${HOME}/.claude/plugins/data/codex-openai-codex"
-else
-  CODEX_PLUGIN_DATA=$(find "${HOME}/.claude/plugins/data" -maxdepth 1 \
-    -name "*codex*" -type d 2>/dev/null | sort -r | head -1)
-fi
-```
-
-If the companion script is not found, stop and tell the user to run
-`/codex:setup`.
-
-3. Locate the cc-codex watchdog script:
+   Write the brief to a file and dispatch it. The script adds the
+   non-interactive envelope and prints `JOB=<id>`:
 
 ```bash
-CODEX_WATCHDOG=$(
-  find "${PWD}" -path "*/plugins/cc-codex/scripts/codex-watchdog.sh" \
-    -type f 2>/dev/null | head -1
-)
-if [[ -z "$CODEX_WATCHDOG" ]]; then
-  CODEX_WATCHDOG=$(find "$HOME/.claude/plugins/cache" \
-    -path "*/cc-codex/scripts/codex-watchdog.sh" \
-    -type f 2>/dev/null | sort -r | head -1)
-fi
+cat > /tmp/cc-codex-brief-1.md <<'BRIEF'
+<brief>
+BRIEF
+~/.claude/cc-codex/bin/codex-task --brief /tmp/cc-codex-brief-1.md
 ```
 
-4. Dispatch the implementation to Codex as a background task. Use the
-   handoff envelope below with the brief from step 1:
+   If it reports that Codex is missing or not authenticated, stop and tell the
+   user to run `/codex:setup`. Independent tasks: one brief file and one job
+   each, dispatched together. Dependent tasks: one at a time.
+
+2. Start two watchers per job, then end your turn and wait for notifications:
+
+   - Completion: `Bash(run_in_background=true)`: `~/.claude/cc-codex/bin/codex-wait <job-id>`
+   - Stall alarm: `Monitor({command: "~/.claude/cc-codex/bin/codex-watchdog --job-id <job-id>", description: "Codex stall alarm <job-id>", persistent: true})`
+
+   The stall alarm stays silent while Codex makes progress. If `codex-wait`
+   exits with `RUNNING` (still busy after 2h), start it again.
+
+3. On a `STUCK|...` line, read `tail -n 60 <log>` and choose by total cost
+   (Codex tokens + Claude tokens + user wait time):
+   - Still progressing or transient → keep waiting.
+   - Addressable, first or second occurrence → `~/.claude/cc-codex/bin/codex-cancel <job-id>`,
+     refine the brief from what the log shows, dispatch again.
+   - Fundamental blocker (auth, missing tool, environment) or 2 retries used →
+     cancel and tell the user what blocked it.
+   - Only a small remainder that Codex keeps failing → cancel and finish it
+     yourself.
+
+## Review
+
+4. When `codex-wait` returns, stop that job's Monitor. Its output is the
+   starting point: final status, Codex's report, changed files.
+
+5. Run the acceptance commands yourself. They are the main evidence.
+
+6. Read code only where it matters: failing areas, core or security-sensitive
+   files, files you did not expect in the change list. Use
+   `git diff -- <file>` per file.
+
+7. If something is wrong, write a short feedback brief (failing command, error,
+   expected behavior) and continue the same Codex thread, which keeps its own
+   context:
 
 ```bash
-CLAUDE_PLUGIN_DATA="$CODEX_PLUGIN_DATA" \
-  node "$CODEX_COMPANION" task --background --write --fresh \
-  "<task>
-You are a non-interactive agent. Execute immediately without asking for confirmation or approval.
-
-Claude Code has already discussed the task with the user. Use the handoff brief below as the implementation source of truth. Project instructions that require planning first, waiting for approval, or asking before edits apply to Claude's conversation with the user. They do not apply to this delegated Codex run.
-
-Do the requested implementation directly. Create or edit files as needed. Run the relevant checks. Report the changed files and verification result.
-
-Handoff brief:
-<compact handoff brief>
-</task>" --json
+~/.claude/cc-codex/bin/codex-task --brief /tmp/cc-codex-fix-1.md --resume
 ```
 
-Parse the JSON output and extract the `jobId` field. This is the task's
-tracking ID for all subsequent companion calls.
+   Then repeat steps 2–6. `--resume` continues the latest finished task of
+   this workspace and needs every other Codex task here to be finished; with
+   parallel tasks still running, dispatch a fresh, self-contained fix brief
+   instead. After 2 fix rounds without success, stop and report.
 
-If the companion reports that Codex is not authenticated or not installed,
-stop and tell the user to run `/codex:setup`.
+8. Independent verification: dispatch with `--kind verify` only when your
+   acceptance commands cannot cover the change (for example: no runnable
+   tests, behavior you cannot exercise, or risky areas such as auth, data
+   migrations, broad refactors). Otherwise your passing checks are the
+   verification.
 
-5. Start two parallel watchers for the background task:
-
-**Completion listener** — notifies you the moment the task finishes:
-
-```
-Bash(run_in_background=true):
-  CLAUDE_PLUGIN_DATA="$CODEX_PLUGIN_DATA" \
-    node "$CODEX_COMPANION" status "<job-id>" \
-    --wait --timeout-ms 7200000 --json
-```
-
-**Health-check monitor** — triggers a health check every 10 minutes:
-
-```
-Monitor({
-  command: "bash \"$CODEX_WATCHDOG\" --job-id \"<job-id>\" --companion \"$CODEX_COMPANION\" --plugin-data \"$CODEX_PLUGIN_DATA\" --interval 600",
-  description: "Codex health check for <job-id>",
-  persistent: true
-})
-```
-
-6. Wait for events from either watcher and handle them:
-
-**On completion listener notification** (background Bash finishes):
-- The task has finished. Read the result:
-  ```bash
-  CLAUDE_PLUGIN_DATA="$CODEX_PLUGIN_DATA" \
-    node "$CODEX_COMPANION" result "<job-id>" --json
-  ```
-- Stop the health-check Monitor if it is still running.
-- Proceed to step 7 (review).
-
-**On health-check Monitor notification**:
-- Parse the event line. Format: `FINISHED|<status>|<json>` or
-  `HEALTH_CHECK|<json>`.
-- If `FINISHED`: the task ended. Read the result via companion
-  `result --json`, stop the Monitor, and proceed to step 7.
-- If `HEALTH_CHECK`: the task is still running. Perform a health assessment:
-  1. Extract the `logFile` path from the status JSON
-     (field path: `job.logFile`).
-  2. Read the log file using the Read tool. Read the last 200 lines
-     to see recent activity.
-  3. **Use your own judgment** to assess whether Codex is stuck or making
-     progress. Signs of being stuck include but are not limited to:
-     - Repeating the same error in a loop
-     - No meaningful new output since the last check
-     - Stuck in a retry/backoff cycle that is not converging
-     - Waiting for user input it will never receive
-     - Import errors, permission errors, or environment issues
-     - Repeated identical tool calls with no progress
-  4. If Codex is making normal progress: do nothing. Wait for the next
-     health check or the completion listener.
-  5. If Codex appears stuck: apply the cost-based decision below.
-
-## Cost-based stuck decision
-
-When you determine Codex is stuck, choose **one** action based on cost
-minimization (Codex tokens + Claude tokens + user wait time):
-
-### Cancel
-
-Choose when:
-- Already retried this task 2 or more times
-- A fundamental blocker exists (auth failure, missing tool, environment
-  incompatibility, task exceeds Codex capability)
-
-Action:
-```bash
-CLAUDE_PLUGIN_DATA="$CODEX_PLUGIN_DATA" \
-  node "$CODEX_COMPANION" cancel "<job-id>"
-```
-Stop the Monitor. Inform the user what went wrong and why you cancelled.
-
-### Re-dispatch
-
-Choose when:
-- First or second stuck occurrence for this task
-- The stuck point is addressable — you can simplify the brief, split the
-  task, add environment hints, or work around the specific issue
-- Estimated Codex retry cost < estimated Claude direct implementation cost
-
-Action:
-1. Cancel the current task via companion `cancel`.
-2. Refine the implementation brief based on what the logs revealed.
-3. Go back to step 4 and dispatch again with the refined brief.
-4. Track the retry count. Do not retry more than 2 times total.
-
-### Takeover
-
-Choose when:
-- Remaining work is small enough that you can finish faster than Codex
-- Re-dispatch has already been attempted and failed
-- Estimated Claude implementation cost < further Codex retry cost
-
-Action:
-1. Cancel the current task via companion `cancel`.
-2. Stop the Monitor.
-3. Implement the remaining work directly using Bash, Read, and other tools.
-4. Proceed to step 7 (review) with your own changes.
-
-## Review and verification
-
-7. Read the completed result. Check `git status` and `git diff` when files changed.
-
-8. If the implementation has significant problems, dispatch a focused fix
-   using the same async pattern (steps 2–6) with a refined brief targeting
-   the specific issues.
-
-9. When your review passes, dispatch a separate verification run using the
-   same async pattern (steps 2–6) with the verification envelope:
-
-```text
-<task>
-You are a non-interactive verification agent. Execute immediately without asking for confirmation or approval.
-
-Claude Code has already reviewed the implementation. Verify the recent changes against the handoff brief and original conversation context. Project instructions that require planning first, waiting for approval, or asking before tool use apply to Claude's conversation with the user. They do not apply to this delegated Codex verification run.
-
-Run relevant checks. Report pass/fail results and any missing or broken behavior. Do not redesign the solution.
-
-Handoff brief:
-<verification brief>
-</task>
-```
-
-10. Reply with a short final verdict:
-    - what Codex changed
-    - what you reviewed
-    - what the verifier checked
-    - any remaining risk or manual step
+9. Reply with a short final verdict:
+   - what Codex changed
+   - what you checked and the results
+   - whether an independent verification ran and its result
+   - any remaining risk or manual step

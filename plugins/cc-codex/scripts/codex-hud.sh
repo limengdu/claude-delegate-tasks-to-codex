@@ -8,33 +8,19 @@ set -u
 
 MAX_LABEL_LENGTH=50
 
-# Find the official Codex companion script used by /codex:status.
-# 查找 /codex:status 背后使用的官方 Codex companion 脚本。
-find_codex_companion() {
-  if [[ -n "${CC_CODEX_HUD_COMPANION:-}" && -f "${CC_CODEX_HUD_COMPANION}" ]]; then
-    echo "${CC_CODEX_HUD_COMPANION}"
-    return
-  fi
+# shellcheck source=lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-  find "${HOME}/.claude/plugins/cache" \
-    -path "*/openai-codex/codex/*/scripts/codex-companion.mjs" \
-    -type f 2>/dev/null | sort -r | head -1
-}
+find_codex_companion() { cc_find_companion; }
 
-# Find the Codex plugin data directory that stores tracked jobs.
-# 查找保存 Codex 任务状态的插件数据目录。
+# Codex plugin data dir: the caller's CLAUDE_PLUGIN_DATA, else the official default.
+# Codex 插件数据目录：优先用调用方的 CLAUDE_PLUGIN_DATA，否则用官方默认目录。
 find_codex_plugin_data() {
   if [[ -n "${CLAUDE_PLUGIN_DATA:-}" && -d "${CLAUDE_PLUGIN_DATA}" ]]; then
     echo "${CLAUDE_PLUGIN_DATA}"
-    return
+  else
+    cc_plugin_data
   fi
-
-  if [[ -d "${HOME}/.claude/plugins/data/codex-openai-codex" ]]; then
-    echo "${HOME}/.claude/plugins/data/codex-openai-codex"
-    return
-  fi
-
-  find "${HOME}/.claude/plugins/data" -maxdepth 1 -name "*codex*" -type d 2>/dev/null | sort -r | head -1
 }
 
 # Convert /codex:status --json data into a compact table-like HUD label.

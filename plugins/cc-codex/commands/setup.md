@@ -137,43 +137,18 @@ Run a practical setup flow that gets the user ready to use:
    Preserve any login guidance from the setup result, especially guidance to
    run `codex login`.
 
-8. Configure the HUD wrapper at:
+8. Check the HUD wrapper at:
 
    ```text
    ~/.claude/cc-codex/codex-hud-wrapper.sh
    ```
 
-   The wrapper should locate the current cc-codex HUD script each time it runs,
-   then execute it. It should support both local development with `--plugin-dir`
-   and normal installed plugins from Claude Code's plugin cache.
+   The cc-codex session-start hook writes this wrapper and the helpers in
+   `~/.claude/cc-codex/bin` automatically. If the wrapper is missing, run the
+   hook once:
 
    ```bash
-   #!/usr/bin/env bash
-   set -u
-
-   candidates=()
-
-   if [[ -n "${PWD:-}" ]]; then
-     while IFS= read -r script; do
-       candidates+=("${script}")
-     done < <(find "${PWD}" -path "*/plugins/cc-codex/scripts/codex-hud.sh" -type f 2>/dev/null | sort -r)
-   fi
-
-   while IFS= read -r script; do
-     candidates+=("${script}")
-   done < <(find "${HOME}/.claude/plugins/cache" -path "*/cc-codex/scripts/codex-hud.sh" -type f 2>/dev/null | sort -r)
-
-   for script in "${candidates[@]}"; do
-     [[ -x "${script}" ]] && exec "${script}"
-   done
-
-   exit 0
-   ```
-
-   Make it executable:
-
-   ```bash
-   chmod +x "$HOME/.claude/cc-codex/codex-hud-wrapper.sh"
+   bash "$(ls -d "$HOME"/.claude/plugins/cache/cc-codex-marketplace/cc-codex/*/scripts/session-start-hook.sh | sort -V | tail -n 1)"
    ```
 
 9. Configure the Claude Code `statusLine` setting.

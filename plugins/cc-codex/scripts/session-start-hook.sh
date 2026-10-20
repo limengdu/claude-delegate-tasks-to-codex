@@ -1,43 +1,33 @@
 #!/usr/bin/env bash
-# Auto-configure cc-codex HUD wrapper and statusLine on session start.
-# Ensures claude-hud shows Codex status without manual /cc-codex:setup.
+# Session-start setup for cc-codex:
+#   1. Write launchers in ~/.claude/cc-codex/bin that point at this plugin's scripts.
+#   2. Write the HUD wrapper and add it to claude-hud's statusLine --extra-cmd.
+# 会话启动时配置 cc-codex：
+#   1. 在 ~/.claude/cc-codex/bin 写入指向本插件脚本的启动器。
+#   2. 写入 HUD 包装脚本，并加入 claude-hud 状态栏的 --extra-cmd。
 set -u
 
+SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WRAPPER_DIR="${HOME}/.claude/cc-codex"
+BIN_DIR="${WRAPPER_DIR}/bin"
 WRAPPER_PATH="${WRAPPER_DIR}/codex-hud-wrapper.sh"
 SETTINGS_FILE="${HOME}/.claude/settings.json"
 
-ensure_wrapper() {
-  mkdir -p "$WRAPPER_DIR" 2>/dev/null || return 0
+# Write a launcher script <name> that execs <target> with all arguments.
+# 写入启动器 <name>，带全部参数执行 <target>。
+write_launcher() {
+  local path="$1" target="$2"
+  printf '#!/usr/bin/env bash\nexec bash %q "$@"\n' "$target" > "${path}.tmp.$$" \
+    && chmod +x "${path}.tmp.$$" && mv "${path}.tmp.$$" "$path"
+}
 
-  if [[ -f "$WRAPPER_PATH" && -x "$WRAPPER_PATH" ]]; then
-    return 0
-  fi
-
-  cat > "$WRAPPER_PATH" << 'WRAPPER'
-#!/usr/bin/env bash
-set -u
-
-candidates=()
-
-if [[ -n "${PWD:-}" ]]; then
-  while IFS= read -r script; do
-    candidates+=("${script}")
-  done < <(find "${PWD}" -path "*/plugins/cc-codex/scripts/codex-hud.sh" -type f 2>/dev/null | sort -r)
-fi
-
-while IFS= read -r script; do
-  candidates+=("${script}")
-done < <(find "${HOME}/.claude/plugins/cache" -path "*/cc-codex/scripts/codex-hud.sh" -type f 2>/dev/null | sort -r)
-
-for script in "${candidates[@]}"; do
-  [[ -x "${script}" ]] && exec "${script}"
-done
-
-exit 0
-WRAPPER
-
-  chmod +x "$WRAPPER_PATH"
+ensure_launchers() {
+  mkdir -p "$BIN_DIR" 2>/dev/null || return 0
+  write_launcher "${BIN_DIR}/codex-task"     "${SCRIPTS_DIR}/codex-task.sh"
+  write_launcher "${BIN_DIR}/codex-wait"     "${SCRIPTS_DIR}/codex-wait.sh"
+  write_launcher "${BIN_DIR}/codex-watchdog" "${SCRIPTS_DIR}/codex-watchdog.sh"
+  write_launcher "${BIN_DIR}/codex-cancel"   "${SCRIPTS_DIR}/codex-cancel.sh"
+  write_launcher "$WRAPPER_PATH"             "${SCRIPTS_DIR}/codex-hud.sh"
 }
 
 ensure_statusline_extra_cmd() {
@@ -103,5 +93,5 @@ except Exception:
 PYTHON
 }
 
-ensure_wrapper
+ensure_launchers
 ensure_statusline_extra_cmd

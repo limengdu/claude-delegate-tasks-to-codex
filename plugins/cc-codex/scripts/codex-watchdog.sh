@@ -1,124 +1,109 @@
 #!/usr/bin/env bash
-# codex-watchdog.sh — Periodic health-check timer for a background Codex task.
-# codex-watchdog.sh —— 后台 Codex 任务的定时健康检查脚本。
+# codex-watchdog.sh — Stall detector for a background Codex task.
+# codex-watchdog.sh —— 后台 Codex 任务的卡死检测脚本。
 #
-# Outputs one line per interval for the Monitor tool. Each line triggers Claude
-# to read Codex logs and assess whether the task is stuck.
+# Polls the job quietly and prints a line for the Monitor tool only when the
+# task looks stuck. Exits silently when the job ends (codex-wait.sh reports it).
+#
+# Output lines:
+#   STUCK|no log output for <sec>s|log=<path>
+#   STUCK|repeated error x<count>: <line>|log=<path>
+#   ERROR|<message>
 #
 # Usage:
-#   bash codex-watchdog.sh --job-id <id> [--companion <path>] [--plugin-data <dir>] [--interval <sec>]
+#   bash codex-watchdog.sh --job-id <id> [--interval <sec>] [--stall <sec>] [--repeat <count>]
+#     --interval  poll period, default 60
+#     --stall     seconds without new log output before reporting, default 900
+#     --repeat    occurrences of the same error line in the last 80 log lines, default 8
 
 set -u
+# shellcheck source=lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-INTERVAL=600
+INTERVAL=60
+STALL=900
+REPEAT=8
 JOB_ID=""
-COMPANION=""
-PLUGIN_DATA=""
-
-# ---------------------------------------------------------------------------
-# Argument parsing
-# 参数解析
-# ---------------------------------------------------------------------------
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --job-id)      JOB_ID="$2";      shift 2 ;;
-    --companion)   COMPANION="$2";   shift 2 ;;
-    --plugin-data) PLUGIN_DATA="$2"; shift 2 ;;
-    --interval)    INTERVAL="$2";    shift 2 ;;
-    *)             shift ;;
+    --job-id)   JOB_ID="$2";   shift 2 ;;
+    --interval) INTERVAL="$2"; shift 2 ;;
+    --stall)    STALL="$2";    shift 2 ;;
+    --repeat)   REPEAT="$2";   shift 2 ;;
+    *)          shift 2 ;;
   esac
 done
 
-# ---------------------------------------------------------------------------
-# Resolve companion script path if not provided.
-# 如果未指定 companion 路径，自动查找。
-# ---------------------------------------------------------------------------
+[[ -n "$JOB_ID" ]] || { echo "ERROR|missing required --job-id"; exit 1; }
 
-find_codex_companion() {
-  if [[ -n "${CC_CODEX_HUD_COMPANION:-}" && -f "${CC_CODEX_HUD_COMPANION}" ]]; then
-    echo "${CC_CODEX_HUD_COMPANION}"
-    return
-  fi
+COMPANION="$(cc_find_companion)"
+[[ -n "$COMPANION" ]] || { echo "ERROR|codex companion script not found"; exit 1; }
+export CLAUDE_PLUGIN_DATA="$(cc_plugin_data)"
 
-  find "${HOME}/.claude/plugins/cache" \
-    -path "*/openai-codex/codex/*/scripts/codex-companion.mjs" \
-    -type f 2>/dev/null | sort -r | head -1
-}
-
-# ---------------------------------------------------------------------------
-# Resolve Codex plugin data directory if not provided.
-# 如果未指定 plugin-data 路径，自动查找。
-# ---------------------------------------------------------------------------
-
-find_codex_plugin_data() {
-  if [[ -d "${HOME}/.claude/plugins/data/codex-openai-codex" ]]; then
-    echo "${HOME}/.claude/plugins/data/codex-openai-codex"
-    return
-  fi
-
-  find "${HOME}/.claude/plugins/data" -maxdepth 1 -name "*codex*" -type d 2>/dev/null | sort -r | head -1
-}
-
-# ---------------------------------------------------------------------------
-# Validate required arguments.
-# 校验必要参数。
-# ---------------------------------------------------------------------------
-
-if [[ -z "$JOB_ID" ]]; then
-  echo "ERROR|missing required --job-id"
-  exit 1
-fi
-
-if [[ -z "$COMPANION" ]]; then
-  COMPANION=$(find_codex_companion)
-fi
-
-if [[ -z "$COMPANION" || ! -f "$COMPANION" ]]; then
-  echo "ERROR|codex companion script not found"
-  exit 1
-fi
-
-if [[ -z "$PLUGIN_DATA" ]]; then
-  PLUGIN_DATA=$(find_codex_plugin_data)
-fi
-
-# ---------------------------------------------------------------------------
-# Main loop: sleep → check status → output event line.
-# 主循环：休眠 → 检查状态 → 输出事件行。
-# ---------------------------------------------------------------------------
+last_size=-1
+last_change=$(date +%s)
+stall_reported=0
+reported_errors=""
+status_failures=0
 
 while true; do
   sleep "$INTERVAL"
 
-  if [[ -n "$PLUGIN_DATA" ]]; then
-    STATUS_JSON=$(CLAUDE_PLUGIN_DATA="$PLUGIN_DATA" node "$COMPANION" status "$JOB_ID" --json 2>/dev/null || echo "")
-  else
-    STATUS_JSON=$(node "$COMPANION" status "$JOB_ID" --json 2>/dev/null || echo "")
-  fi
-
-  if [[ -z "$STATUS_JSON" ]]; then
-    echo "HEALTH_CHECK|{\"error\":\"status check failed\",\"jobId\":\"$JOB_ID\"}"
-    continue
-  fi
-
-  JOB_STATUS=$(echo "$STATUS_JSON" | python3 -c "
+  # One line: "<status>\t<logFile>"
+  # 一行输出：「状态\t日志路径」
+  INFO="$(node "$COMPANION" status "$JOB_ID" --json 2>/dev/null | python3 -c '
 import json, sys
 try:
     d = json.load(sys.stdin)
-    job = d.get('job', d)
-    print(job.get('status', 'unknown'))
+    job = d.get("job") or d
+    print(job.get("status", "unknown") + "\t" + str(job.get("logFile") or ""))
 except Exception:
-    print('unknown')
-" 2>/dev/null || echo "unknown")
+    pass
+')"
+
+  if [[ -z "$INFO" ]]; then
+    status_failures=$((status_failures + 1))
+    if [[ $status_failures -eq 3 ]]; then
+      echo "ERROR|status check failed 3 times for job ${JOB_ID}"
+    fi
+    continue
+  fi
+  status_failures=0
+
+  JOB_STATUS="${INFO%%$'\t'*}"
+  LOG_FILE="${INFO#*$'\t'}"
 
   case "$JOB_STATUS" in
-    completed|failed|cancelled)
-      echo "FINISHED|$JOB_STATUS|$STATUS_JSON"
-      exit 0
-      ;;
-    *)
-      echo "HEALTH_CHECK|$STATUS_JSON"
-      ;;
+    queued|running) ;;
+    *) exit 0 ;;
   esac
+
+  [[ -n "$LOG_FILE" && -f "$LOG_FILE" ]] || continue
+  now=$(date +%s)
+
+  # Stall: the log has not grown for STALL seconds.
+  # 卡住：日志超过 STALL 秒没有新增内容。
+  size=$(wc -c < "$LOG_FILE")
+  if [[ "$size" -ne "$last_size" ]]; then
+    last_size=$size
+    last_change=$now
+    stall_reported=0
+  elif [[ $stall_reported -eq 0 && $((now - last_change)) -ge $STALL ]]; then
+    echo "STUCK|no log output for $((now - last_change))s|log=${LOG_FILE}"
+    stall_reported=1
+  fi
+
+  # Loop: the same error line repeats REPEAT+ times in the recent log; each distinct line is reported once.
+  # 死循环：同一条错误在最近日志里重复 REPEAT 次以上；每条不同的错误只报告一次。
+  top="$(tail -n 80 "$LOG_FILE" | grep -iE 'error|fail|exception|denied|retry' \
+    | sort | uniq -c | sort -rn | head -n 1)"
+  if [[ -n "$top" ]]; then
+    count=$(echo "$top" | awk '{print $1}')
+    line="$(echo "$top" | sed -E 's/^ *[0-9]+ //' | cut -c1-160)"
+    if [[ "$count" -ge "$REPEAT" && "$reported_errors" != *"$line"* ]]; then
+      echo "STUCK|repeated error x${count}: ${line}|log=${LOG_FILE}"
+      reported_errors="${reported_errors}"$'\n'"${line}"
+    fi
+  fi
 done
