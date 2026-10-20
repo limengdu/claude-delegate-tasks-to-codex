@@ -60,6 +60,20 @@ missing, tell the user to restart Claude Code and stop.
    - constraints from the user and repository, plus any conversation context
      Codex cannot see
 
+   Choose the Codex thread for each new task. `--resume` continues the most
+   recently finished Codex job in this workspace:
+   - **Continue** (`--resume`) when the task builds directly on the previous
+     task (same feature or files, a follow-up such as "now add export") and
+     that previous task is the latest finished Codex job here. The brief then
+     states only the new goal, scope and acceptance; Codex already knows the
+     earlier work.
+   - **Fresh** (default) when the task is unrelated, runs in parallel with
+     another job, or the latest finished job was a verification run or a
+     different task. Add the context Codex needs from earlier tasks to the
+     brief.
+   - After 3 consecutive continued tasks, start fresh with a short recap of
+     the earlier work, so the thread stays focused.
+
    Write the brief to a file and dispatch it. The script adds the
    non-interactive envelope and prints `JOB=<id>`:
 

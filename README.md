@@ -149,7 +149,7 @@ Claude 确认进入持久委派模式
   ↓
 你发送任务 → Claude 拆任务、派 Codex（含卡死报警）、审核、验证、给结论
   ↓
-你发送下一个任务 → Claude 继续派 Codex …（循环）
+你发送下一个任务 → 和上一个紧密相关就接着同一个 Codex 会话，无关就开新会话并补上背景 …（循环）
   ↓
 你运行 /cc-codex:off → Claude 退出委派模式
 ```
@@ -402,7 +402,9 @@ For manual setup, run the official `/codex:setup`, `/claude-hud:setup`, and:
 2. Claude confirms persistent delegation mode is active.
 3. You send a task → Claude shapes, dispatches (with stall alarm),
    reviews, verifies, reports.
-4. You send the next task → same cycle repeats.
+4. You send the next task → same cycle repeats. A follow-up that builds on
+   the previous task continues the same Codex thread; an unrelated task starts
+   a fresh one with the needed context in the brief.
 5. You run `/cc-codex:off` → Claude exits delegation mode.
 
 ### `/cc-codex:handoff`
