@@ -199,6 +199,10 @@ Run a practical setup flow that gets the user ready to use:
    --extra-cmd "$HOME/.claude/cc-codex/codex-hud-wrapper.sh"
    ```
 
+   claude-hud runs `--extra-cmd` only when `CLAUDE_HUD_ALLOW_EXTRA_CMD=1` is
+   set, so the command must also start with that variable, for example
+   `CLAUDE_HUD_ALLOW_EXTRA_CMD=1 bash -c '...'`.
+
    If a `statusLine` command exists with a different `--extra-cmd`, use
    `AskUserQuestion` to ask whether to replace it. Only one claude-hud
    `--extra-cmd` value is supported.

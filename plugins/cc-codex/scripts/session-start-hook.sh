@@ -58,16 +58,23 @@ command = status_line.get("command", "")
 if not command:
     sys.exit(0)
 
-if "codex-hud-wrapper" in command:
-    sys.exit(0)
+new_command = command
 
-if "--extra-cmd" in command:
-    sys.exit(0)
+# Attach the wrapper when no other --extra-cmd is configured.
+# 未配置其他 --extra-cmd 时接上包装脚本。
+if "codex-hud-wrapper" not in new_command and "--extra-cmd" not in new_command:
+    if new_command.endswith("'"):
+        new_command = new_command[:-1] + extra_cmd_arg + "'"
+    else:
+        new_command = new_command + extra_cmd_arg
 
-if command.endswith("'"):
-    new_command = command[:-1] + extra_cmd_arg + "'"
-else:
-    new_command = command + extra_cmd_arg
+# claude-hud runs --extra-cmd only with CLAUDE_HUD_ALLOW_EXTRA_CMD enabled.
+# claude-hud 只有在开启 CLAUDE_HUD_ALLOW_EXTRA_CMD 时才执行 --extra-cmd。
+if "codex-hud-wrapper" in new_command and "CLAUDE_HUD_ALLOW_EXTRA_CMD" not in new_command:
+    new_command = "CLAUDE_HUD_ALLOW_EXTRA_CMD=1 " + new_command
+
+if new_command == command:
+    sys.exit(0)
 
 settings["statusLine"]["command"] = new_command
 

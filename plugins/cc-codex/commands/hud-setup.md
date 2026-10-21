@@ -36,10 +36,11 @@ claude-hud statusline. It only appears when Codex jobs are running.
    bash "$(ls -d "$HOME"/.claude/plugins/cache/cc-codex-marketplace/cc-codex/*/scripts/session-start-hook.sh | sort -V | tail -n 1)"
    ```
 
-4. Append `--extra-cmd` with the stable wrapper path:
+4. Append `--extra-cmd` with the stable wrapper path, and enable it with
+   `CLAUDE_HUD_ALLOW_EXTRA_CMD=1` (claude-hud runs `--extra-cmd` only then):
 
    ```text
-   node /path/to/claude-hud/dist/index.js --extra-cmd "$HOME/.claude/cc-codex/codex-hud-wrapper.sh"
+   CLAUDE_HUD_ALLOW_EXTRA_CMD=1 node /path/to/claude-hud/dist/index.js --extra-cmd "$HOME/.claude/cc-codex/codex-hud-wrapper.sh"
    ```
 
 5. If no `statusLine` is configured at all, tell the user they need

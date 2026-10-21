@@ -41,7 +41,8 @@ except Exception:
 
 
 def clean(value):
-    return " ".join(str(value or "").split())
+    text = " ".join(str(value or "").split())
+    return text[len("<task>"):].lstrip() if text.startswith("<task>") else text
 
 
 def first_non_empty(*values):
