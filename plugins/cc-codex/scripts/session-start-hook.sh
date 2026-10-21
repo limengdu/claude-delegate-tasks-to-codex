@@ -73,10 +73,17 @@ if "codex-hud-wrapper" not in new_command and "--extra-cmd" not in new_command:
 if "codex-hud-wrapper" in new_command and "CLAUDE_HUD_ALLOW_EXTRA_CMD" not in new_command:
     new_command = "CLAUDE_HUD_ALLOW_EXTRA_CMD=1 " + new_command
 
-if new_command == command:
+# Claude Code re-renders the status line only on events unless refreshInterval
+# (seconds) is set; a periodic refresh keeps the Codex timer moving while idle.
+# Claude Code 默认只在有事件时刷新状态栏，设置 refreshInterval（秒）后才会定时刷新，Codex 计时才能走动。
+refresh = status_line.get("refreshInterval")
+new_refresh = refresh if isinstance(refresh, (int, float)) and refresh > 0 else 10
+
+if new_command == command and new_refresh == refresh:
     sys.exit(0)
 
 settings["statusLine"]["command"] = new_command
+settings["statusLine"]["refreshInterval"] = new_refresh
 
 backup = settings_file + ".bak"
 try:

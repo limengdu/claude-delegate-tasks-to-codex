@@ -43,7 +43,10 @@ claude-hud statusline. It only appears when Codex jobs are running.
    CLAUDE_HUD_ALLOW_EXTRA_CMD=1 node /path/to/claude-hud/dist/index.js --extra-cmd "$HOME/.claude/cc-codex/codex-hud-wrapper.sh"
    ```
 
-5. If no `statusLine` is configured at all, tell the user they need
+5. Set `"refreshInterval": 10` on the `statusLine` entry, so the Codex status
+   keeps updating while Claude waits for a job.
+
+6. If no `statusLine` is configured at all, tell the user they need
    claude-hud installed first:
 
    ```text
@@ -51,7 +54,7 @@ claude-hud statusline. It only appears when Codex jobs are running.
    /claude-hud:setup
    ```
 
-6. If `--extra-cmd` is already present in the statusLine, ask the user if they
+7. If `--extra-cmd` is already present in the statusLine, ask the user if they
    want to replace it. Only one claude-hud `--extra-cmd` value is supported.
 
-7. After updating, tell the user to restart Claude Code for it to take effect.
+8. After updating, tell the user to restart Claude Code for it to take effect.

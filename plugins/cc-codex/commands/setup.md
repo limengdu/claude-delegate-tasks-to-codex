@@ -203,6 +203,9 @@ Run a practical setup flow that gets the user ready to use:
    set, so the command must also start with that variable, for example
    `CLAUDE_HUD_ALLOW_EXTRA_CMD=1 bash -c '...'`.
 
+   Set `"refreshInterval": 10` on the `statusLine` entry as well, so the Codex
+   status keeps updating while Claude waits for a job.
+
    If a `statusLine` command exists with a different `--extra-cmd`, use
    `AskUserQuestion` to ask whether to replace it. Only one claude-hud
    `--extra-cmd` value is supported.
