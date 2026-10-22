@@ -25,4 +25,5 @@ $ARGUMENTS
 - If a Codex job is already running, this command does not cancel that external
   job. It only changes how future user requests in this conversation should be
   handled.
+- Clear the recorded mode: `~/.claude/cc-codex/bin/codex-mode off`
 - Reply briefly that cc-codex delegation is off for this conversation.

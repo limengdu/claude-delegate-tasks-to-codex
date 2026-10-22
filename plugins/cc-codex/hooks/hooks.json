@@ -1,5 +1,5 @@
 {
-  "description": "Auto-configure cc-codex HUD integration on session start.",
+  "description": "Configure cc-codex helpers and HUD on session start; restore /cc-codex:on after compaction.",
   "hooks": {
     "SessionStart": [
       {
@@ -7,6 +7,16 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/session-start-hook.sh\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/on-mode-restore.sh\"",
             "timeout": 5
           }
         ]

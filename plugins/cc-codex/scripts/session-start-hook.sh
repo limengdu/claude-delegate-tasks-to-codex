@@ -27,6 +27,7 @@ ensure_launchers() {
   write_launcher "${BIN_DIR}/codex-wait"     "${SCRIPTS_DIR}/codex-wait.sh"
   write_launcher "${BIN_DIR}/codex-watchdog" "${SCRIPTS_DIR}/codex-watchdog.sh"
   write_launcher "${BIN_DIR}/codex-cancel"   "${SCRIPTS_DIR}/codex-cancel.sh"
+  write_launcher "${BIN_DIR}/codex-mode"     "${SCRIPTS_DIR}/codex-mode.sh"
   write_launcher "$WRAPPER_PATH"             "${SCRIPTS_DIR}/codex-hud.sh"
 }
 

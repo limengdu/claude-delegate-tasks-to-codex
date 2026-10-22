@@ -154,6 +154,8 @@ Claude 确认进入持久委派模式
 你运行 /cc-codex:off → Claude 退出委派模式
 ```
 
+持久委派模式按会话记录在 `~/.claude/cc-codex/on-sessions/`。Claude Code 压缩上下文后，cc-codex 会自动把 `on` 的规则重新交给 Claude，模式保持不变，直到你运行 `/cc-codex:off`。
+
 ### `/cc-codex:handoff`（上下文交接）
 
 ```text
@@ -237,10 +239,12 @@ claude-delegate-tasks-to-codex/
 │       ├── scripts/
 │       │   ├── codex-cancel.sh      # Cancel a Codex job
 │       │   ├── codex-hud.sh         # HUD status script
+│       │   ├── codex-mode.sh        # Record /cc-codex:on per session
 │       │   ├── codex-task.sh        # Dispatch a brief as a background Codex job
 │       │   ├── codex-wait.sh        # Wait for a job, print a compact report
 │       │   ├── codex-watchdog.sh    # Stall alarm for the Monitor tool
 │       │   ├── lib.sh               # Shared path resolution
+│       │   ├── on-mode-restore.sh   # Re-inject /cc-codex:on after compaction
 │       │   └── session-start-hook.sh # Write helpers to ~/.claude/cc-codex/bin, configure HUD
 │       └── skills/
 │           └── workflow-guide/
@@ -406,6 +410,8 @@ For manual setup, run the official `/codex:setup`, `/claude-hud:setup`, and:
    the previous task continues the same Codex thread; an unrelated task starts
    a fresh one with the needed context in the brief.
 5. You run `/cc-codex:off` → Claude exits delegation mode.
+
+Persistent mode is recorded per session in `~/.claude/cc-codex/on-sessions/`. After Claude Code compacts the context, cc-codex re-injects the `on` instructions, so the mode stays active until `/cc-codex:off`.
 
 ### `/cc-codex:handoff`
 

@@ -41,6 +41,8 @@ would rather save.
 - If a user message is a question, clarification, or non-actionable comment
   (not an implementation task), answer it directly without dispatching to Codex.
   Stay in persistent delegation mode.
+- First record the mode, so it survives context compaction:
+  `~/.claude/cc-codex/bin/codex-mode on`
 - If `$ARGUMENTS` is not empty, treat it as the first task and begin the dispatch
   flow immediately.
 - If `$ARGUMENTS` is empty, confirm that persistent delegation mode is now active
